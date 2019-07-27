@@ -930,7 +930,7 @@ subroutine AA_InitializeOutputFile(p, InputFileData,InitOut,errStat, errMsg)
         !write( p%unOutFile3, '(A,I5)' )'Number of blades         :', p%numBlades
         !write( p%unOutFile3, '(A,I5)' )'Number of nodes per blade:', p%NumBlNds
         write( p%unOutFile3, '(A,I5)' )'Number of observers      :', p%NrObsLoc
-		write( p%unOutFile2, '(A,I5)' )'Number of frequencies    :', size(p%FreqList)
+		write( p%unOutFile3, '(A,I5)' )'Number of frequencies    :', size(p%FreqList)
 
         numOuts = size(InitOut%WriteOutputHdrSep)
         !......................................................
