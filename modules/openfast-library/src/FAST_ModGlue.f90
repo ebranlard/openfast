@@ -1023,7 +1023,7 @@ subroutine ModGlue_Linearize_OP(p, m, y, p_FAST, m_FAST, y_FAST, t_global, Turbi
    if (Failed()) return
 
    ! Write glue code matrices to file
-   call ModGlue_CalcWriteLinearMatrices(m%ModGlue%Vars, m%ModGlue%Lin, p_FAST, y_FAST, t_global, Un, LinRootName, VF_Linearize, ErrStat2, ErrMsg2)
+   call ModGlue_CalcWriteLinearMatrices(m%ModGlue%Vars, m%ModGlue%Lin, p_FAST, y_FAST, t_global, Un, LinRootName, VF_Linearize, ErrStat2, ErrMsg2, Turbine=Turbine)
    if (Failed()) return
 
    ! Update index for next linearization time
@@ -1334,7 +1334,7 @@ subroutine Postcondition(uVars, dUdu, dUdy, JacScaleFactor)
 
 end subroutine
 
-subroutine ModGlue_CalcWriteLinearMatrices(Vars, Lin, p_FAST, y_FAST, t_global, Un, LinRootName, FilterFlag, ErrStat, ErrMsg, ModSuffix, CalcGlue, FullOutput)
+subroutine ModGlue_CalcWriteLinearMatrices(Vars, Lin, p_FAST, y_FAST, t_global, Un, LinRootName, FilterFlag, ErrStat, ErrMsg, ModSuffix, CalcGlue, FullOutput, Turbine)
    type(ModVarsType), intent(in)             :: Vars           !< Variable data
    type(ModLinType), intent(inout)           :: Lin            !< Linearization data
    type(FAST_ParameterType), intent(in)      :: p_FAST         !< Parameters
@@ -1348,13 +1348,14 @@ subroutine ModGlue_CalcWriteLinearMatrices(Vars, Lin, p_FAST, y_FAST, t_global, 
    character(*), optional, intent(in)        :: ModSuffix      !< Module suffix for file name
    logical, optional, intent(in)             :: CalcGlue       !< Flag to calculate glue state matrices
    logical, optional, intent(in)             :: FullOutput     !< Flag to output all Jacobians
+   type(FAST_TurbineType), intent(in), optional :: Turbine
 
    character(*), parameter          :: RoutineName = 'WriteModuleLinearMatrices'
    integer(IntKi)                   :: ErrStat2
    character(ErrMsgLen)             :: ErrMsg2
    character(32)                    :: Desc
    character(1024)                  :: OutFileName
-   integer(IntKi)                   :: i
+   integer(IntKi)                   :: i,j
    integer(IntKi)                   :: Nx, Nu, Ny
    character(50)                    :: Fmt
    logical, allocatable             :: uUse(:), yUse(:), xUse(:)
@@ -1498,6 +1499,42 @@ subroutine ModGlue_CalcWriteLinearMatrices(Vars, Lin, p_FAST, y_FAST, t_global, 
    if (allocated(Lin%dXdu)) call WrPartialMatrix(Lin%dXdu, Un, p_FAST%OutFmt, 'B', UseRow=xUse, UseCol=uUse)
    if (allocated(Lin%dYdx)) call WrPartialMatrix(Lin%dYdx, Un, p_FAST%OutFmt, 'C', UseRow=yUse, UseCol=xUse)
    if (allocated(Lin%dYdu)) call WrPartialMatrix(Lin%dYdu, Un, p_FAST%OutFmt, 'D', UseRow=yUse, UseCol=uUse)
+
+
+   if (present(Turbine)) then
+      print*,'>>>>>>>>>>>>>>> ElastoDyn Mass Matrix in Lin File'
+      WRITE (Un,'(/,A)' ) 'ED M:1_PtfmSgDOF     2_PtfmSwDOF     3_PtfmHvDOF     4_PtfmRDOF      5_PtfmPDOF      6_PtfmYDOF      7_TwFADOF1      8_TwSSDOF1      9_TwFADOF1      10_TwSSDOF2     11_Yaw          12_RFrl        13_GeAz         14_DrTr         15_TFrl         16_B1Pitch      17_B1Flap1      18_B1Edge1      19_B1Flap2      20_B1Pitch      21_B2Flap1      22_B2Edge1      23_B2Flap2      24_BlPitch3     25_B3Flap1      26_B3Edge1      27_B3Flap2'
+      ! See ElastoDyn_IO.f90 
+      !    INTEGER(IntKi), PARAMETER        :: DOF_Sg   =  1                                   ! DOF index for platform surge
+      !    INTEGER(IntKi), PARAMETER        :: DOF_Sw   =  2                                   ! DOF index for platform sway
+      !    INTEGER(IntKi), PARAMETER        :: DOF_Hv   =  3                                   ! DOF index for platform heave
+      !    INTEGER(IntKi), PARAMETER        :: DOF_R    =  4                                   ! DOF index for platform roll
+      !    INTEGER(IntKi), PARAMETER        :: DOF_P    =  5                                   ! DOF index for platform pitch
+      !    INTEGER(IntKi), PARAMETER        :: DOF_Y    =  6                                   ! DOF index for platform yaw
+      !    INTEGER(IntKi), PARAMETER        :: DOF_TFA1 =  7                                   ! DOF index for 1st tower fore-aft mode
+      !    INTEGER(IntKi), PARAMETER        :: DOF_TSS1 =  8                                   ! DOF index for 1st tower side-to-side mode
+      !    INTEGER(IntKi), PARAMETER        :: DOF_TFA2 =  9                                   ! DOF index for 2nd tower fore-aft mode
+      !    INTEGER(IntKi), PARAMETER        :: DOF_TSS2 = 10                                   ! DOF index for 2nd tower side-to-side mode
+      !    INTEGER(IntKi), PARAMETER        :: DOF_Yaw  = 11                                   ! DOF index for nacelle-yaw
+      !    INTEGER(IntKi), PARAMETER        :: DOF_RFrl = 12                                   ! DOF index for rotor-furl
+      !    INTEGER(IntKi), PARAMETER        :: DOF_GeAz = 13                                   ! DOF index for the generator azimuth
+      !    INTEGER(IntKi), PARAMETER        :: DOF_DrTr = 14                                   ! DOF index for drivetrain rotational-flexibility
+      !    INTEGER(IntKi), PARAMETER        :: DOF_TFrl = 15                                   ! DOF index for tail-furl
+      !    INTEGER(IntKi), PARAMETER        :: DOF_BP (MaxBl) = (/ 16, 20, 24 /)               ! DOF indices for blade pitch
+      !    INTEGER(IntKi), PARAMETER        :: DOF_BE (MaxBl,NumBE) = RESHAPE(  &              ! DOF indices for blade edge:
+      !                                                (/ 18, 22, 26 /),   (/MaxBl,NumBE/) )   !    1st blade edge mode for blades 1,2, and 3, respectively 17 + 3*(K-1)
+      !    INTEGER(IntKi), PARAMETER        :: DOF_BF (MaxBl,NumBF) = RESHAPE(  &              ! DOF indices for blade flap:
+      !                                                (/ 17, 21, 25,           &              !    1st blade flap mode for blades 1,2, and 3, respectively 16 + 3*(K-1)
+      !                                                   19, 23, 27 /),   (/MaxBl,NumBF/) )   !    2nd blade flap mode for blades 1,2, and 3, respectively 18 + 3*(K-1)
+      do I = 1,size(Turbine%ED%m(1)%AugMat,1)
+          do J = 1,size(Turbine%ED%m(1)%AugMat,2)-1 ! Note: last column is force 
+              write(Un,'(E16.6)', advance="no")Turbine%ED%m(1)%AugMat(I,J)
+          enddo
+          write(Un,'(A)') ''
+      enddo
+   endif
+
+
 
    ! Close file
    close (Un)
