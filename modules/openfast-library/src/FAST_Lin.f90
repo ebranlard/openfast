@@ -473,6 +473,7 @@ SUBROUTINE FAST_Linearize_OP(t_global, p_FAST, y_FAST, m_FAST, ED, BD, SrvD, AD1
    INTEGER(IntKi), ALLOCATABLE             :: ipiv(:)
    integer(intki)                          :: NumBl
    integer(intki)                          :: k
+   integer(intki)                          :: I,J
    CHARACTER(1024)                         :: LinRootName
    CHARACTER(1024)                         :: OutFileName
    
@@ -809,8 +810,6 @@ SUBROUTINE FAST_Linearize_OP(t_global, p_FAST, y_FAST, m_FAST, ED, BD, SrvD, AD1
          call cleanup()
          return
       end if
-      
-      
          
    call WrLinFile_txt_Head(t_global, p_FAST, y_FAST, y_FAST%Lin%Glue, LinRootName, Un, ErrStat2, ErrMsg2 )       
       call SetErrStat(ErrStat2,ErrMsg2,ErrStat,ErrMsg,RoutineName)
@@ -834,6 +833,17 @@ SUBROUTINE FAST_Linearize_OP(t_global, p_FAST, y_FAST, m_FAST, ED, BD, SrvD, AD1
          call cleanup()
          return
       end if
+      
+      
+   WRITE (Un,'(/,A)' ) 'ED M:1_PtfmSgDOF     2_PtfmSwDOF     3_PtfmHvDOF     4_PtfmRDOF      5_PtfmPDOF      6_PtfmYDOF      7_TwFADOF1      8_TwSSDOF1      9_TwFADOF1      10_TwSSDOF2     11_Yaw          12_RFrl         13_GeAz         14_DrTr         15_TFrl         16_B1Flap1      17_B1Edge1      18_B1Flap2      19_B2Flap1      20_B2Edge1      21_B2Flap2      22_B3Flap1      23_B3Edge1     24_B3Flap2'
+   do I = 1,size(ED%m%AugMat,1)
+       do J = 1,size(ED%m%AugMat,2)-1 ! Note: last column is force 
+           write(Un,'(E16.6)', advance="no")ED%m%AugMat(I,J)
+       enddo
+       write(Un,'(A)') ''
+   enddo
+
+      
       
       ! Write the results to the file:
    call WrLinFile_txt_End(Un, p_FAST, y_FAST%Lin%Glue )            
@@ -988,7 +998,7 @@ SUBROUTINE WrLinFile_txt_Head(t_global, p_FAST, y_FAST, LinData, FileName, Un, E
       WRITE(Un, '(A)') 'Order of outputs:'      
       call WrLinFile_txt_Table(p_FAST, Un, "Row  ", LinData%op_y, LinData%names_y, rotFrame=LinData%RotFrame_y, UseCol=LinData%use_y  )      
    end if
-      
+
    !.............
    if (p_FAST%LinOutJac) then
       WRITE (Un,'(/,A,/)' ) 'Jacobian matrices:'    !print a blank line
