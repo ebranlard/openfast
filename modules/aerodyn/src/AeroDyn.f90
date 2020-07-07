@@ -920,6 +920,12 @@ subroutine SetParameters( InitInp, InputFileData, p, ErrStat, ErrMsg )
    p%TwrAero          = InputFileData%TwrAero
    p%CavitCheck       = InputFileData%CavitCheck
    p%Gravity          = InitInp%Gravity
+
+   ! Prescribed Actuator Disk options 
+   p%PrescribedAD          = InputFileData%PrescribedAD
+   p%PrescribedCt          = InputFileData%PrescribedCt
+   p%SpanFracFullAD        = InputFileData%SpanFracFullAD
+   p%FreeStream            = InputFileData%FreeStream
   
 
    
@@ -1461,28 +1467,62 @@ subroutine SetOutputsFromBEMT(p, m, y )
    real(reki)                              :: force(3)
    real(reki)                              :: moment(3)
    real(reki)                              :: q
+   real(reki)                              :: r
+   real(reki)                              :: U0
+   real(reki)                              :: Rtip
+   real(reki)                              :: Ct_loc
+   real(reki)                              :: dT_B_dr
    
   
    
    force(3)    =  0.0_ReKi          
    moment(1:2) =  0.0_ReKi          
+
    do k=1,p%NumBlades
       do j=1,p%NumBlNds
                       
-         q = 0.5 * p%airDens * m%BEMT_y%Vrel(j,k)**2              ! dynamic pressure of the jth node in the kth blade
-         force(1) =  m%BEMT_y%cx(j,k) * q * p%BEMT%chord(j,k)     ! X = normal force per unit length (normal to the plane, not chord) of the jth node in the kth blade
-         force(2) = -m%BEMT_y%cy(j,k) * q * p%BEMT%chord(j,k)     ! Y = tangential force per unit length (tangential to the plane, not chord) of the jth node in the kth blade
-         moment(3)=  m%BEMT_y%cm(j,k) * q * p%BEMT%chord(j,k)**2  ! M = pitching moment per unit length of the jth node in the kth blade
-         
-            ! save these values for possible output later:
-         m%X(j,k) = force(1)
-         m%Y(j,k) = force(2)
-         m%M(j,k) = moment(3)
-         
-            ! note: because force and moment are 1-d arrays, I'm calculating the transpose of the force and moment outputs
-            !       so that I don't have to take the transpose of WithoutSweepPitchTwist(:,:,j,k)
-         y%BladeLoad(k)%Force(:,j)  = matmul( force,  m%WithoutSweepPitchTwist(:,:,j,k) )  ! force per unit length of the jth node in the kth blade
-         y%BladeLoad(k)%Moment(:,j) = matmul( moment, m%WithoutSweepPitchTwist(:,:,j,k) )  ! moment per unit length of the jth node in the kth blade
+         if (p%PrescribedAD) then 
+             y%BladeLoad(k)%Force(1:3,j)  =0
+             y%BladeLoad(k)%Moment(1:3,j) =0
+
+             Rtip = m%BEMT_u(1)%rLocal(p%NumBlNds,k)
+             r    = m%BEMT_u(1)%rLocal(j,k)
+             U0   = p%FreeStream
+             if ((r/Rtip)<p%SpanFracFullAD ) then
+                 Ct_loc = p%PrescribedCt * (r/Rtip)/p%SpanFracFullAD 
+             else
+                 Ct_loc = p%PrescribedCt           
+             endif
+
+             !print*,'>>> AD Presc Ct',p%PrescribedAD, p%PrescribedCt,p%FreeStream
+             dT_B_dr = p%airDens * U0**2 * Pi* r* Ct_loc / p%NumBlades ! [N/m]
+             y%BladeLoad(k)%Force(1,j)  = dT_B_dr
+
+             ! Hack so that write outputs are consistent
+             q = 0.5 * p%airDens * U0**2              ! dynamic pressure of the jth node in the kth blade
+             m%X(j,k) = dT_B_dr
+             m%Y(j,k) = 0
+             m%M(j,k) = 0
+             m%BEMT_y%cx(j,k) =  dT_B_dr /q /p%BEMT%chord(j,k)
+             m%BEMT_y%cy(j,k) =0 
+             m%BEMT_y%cm(j,k) =0
+            !print*,r/Rtip,Ct_loc,dT_B_dr
+         else
+             q = 0.5 * p%airDens * m%BEMT_y%Vrel(j,k)**2              ! dynamic pressure of the jth node in the kth blade
+             force(1) =  m%BEMT_y%cx(j,k) * q * p%BEMT%chord(j,k)     ! X = normal force per unit length (normal to the plane, not chord) of the jth node in the kth blade
+             force(2) = -m%BEMT_y%cy(j,k) * q * p%BEMT%chord(j,k)     ! Y = tangential force per unit length (tangential to the plane, not chord) of the jth node in the kth blade
+             moment(3)=  m%BEMT_y%cm(j,k) * q * p%BEMT%chord(j,k)**2  ! M = pitching moment per unit length of the jth node in the kth blade
+             
+                ! save these values for possible output later:
+             m%X(j,k) = force(1)
+             m%Y(j,k) = force(2)
+             m%M(j,k) = moment(3)
+             
+                ! note: because force and moment are 1-d arrays, I'm calculating the transpose of the force and moment outputs
+                !       so that I don't have to take the transpose of WithoutSweepPitchTwist(:,:,j,k)
+             y%BladeLoad(k)%Force(:,j)  = matmul( force,  m%WithoutSweepPitchTwist(:,:,j,k) )  ! force per unit length of the jth node in the kth blade
+             y%BladeLoad(k)%Moment(:,j) = matmul( moment, m%WithoutSweepPitchTwist(:,:,j,k) )  ! moment per unit length of the jth node in the kth blade
+         endif
          
       end do !j=nodes
    end do !k=blades

@@ -2029,6 +2029,15 @@ SUBROUTINE ReadPrimaryFile( InputFile, InputFileData, ADBlFile, OutFileRoot, UnE
       CALL Cleanup()
       RETURN
    END IF
+   !----------- ACTUATOR DISK OPTIONS -------------------------------------------
+   CALL ReadCom( UnIn, InputFile, 'Section Header: Actuator Disk', ErrStat2, ErrMsg2, UnEc ) ;CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+   CALL ReadVar( UnIn, InputFile, InputFileData%PrescribedAD, "PrescribedAD", "", ErrStat2, ErrMsg2, UnEc) ;CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+   CALL ReadVar( UnIn, InputFile, InputFileData%PrescribedCt, "PrescribedCt", "", ErrStat2, ErrMsg2, UnEc) ;CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+   CALL ReadVar( UnIn, InputFile, InputFileData%SpanFracFullAD, "SpanFracFullAD", "", ErrStat2, ErrMsg2, UnEc) ;CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+   CALL ReadVar( UnIn, InputFile, InputFileData%FreeStream, "FreeStream", "", ErrStat2, ErrMsg2, UnEc) ;CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+   if (InputFileData%PrescribedAD) then
+       print*,'>>> Using Prescribed AD Ct',InputFileData%PrescribedCt,InputFileData%FreeStream
+   endif
             
    !----------- ENVIRONMENTAL CONDITIONS -------------------------------------------
    CALL ReadCom( UnIn, InputFile, 'Section Header: Environmental Conditions', ErrStat2, ErrMsg2, UnEc )
