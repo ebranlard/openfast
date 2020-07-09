@@ -92,6 +92,10 @@ IMPLICIT NONE
     INTEGER(IntKi)  :: WakeMod      !< Type of wake/induction model {0=none, 1=BEMT, 2=DBEMT} [-]
     INTEGER(IntKi)  :: AFAeroMod      !< Type of blade airfoil aerodynamics model {1=steady model, 2=Beddoes-Leishman unsteady model} [-]
     INTEGER(IntKi)  :: TwrPotent      !< Type tower influence on wind based on potential flow around the tower {0=none, 1=baseline potential flow, 2=potential flow with Bak correction} [-]
+    LOGICAL  :: PrescribedAD      !<  [flag]
+    REAL(ReKi)  :: PrescribedCt      !<  [flag]
+    REAL(ReKi)  :: SpanFracFullAD      !<  [flag]
+    REAL(ReKi)  :: FreeStream      !<  [flag]
     LOGICAL  :: TwrShadow      !< Calculate tower influence on wind based on downstream tower shadow? [-]
     LOGICAL  :: TwrAero      !< Calculate tower aerodynamic loads? [flag]
     LOGICAL  :: FrozenWake      !< Flag that tells this module it should assume a frozen wake during linearization. [-]
@@ -193,6 +197,10 @@ IMPLICIT NONE
     LOGICAL  :: TwrAero      !< Calculate tower aerodynamic loads? [flag]
     LOGICAL  :: FrozenWake      !< Flag that tells this module it should assume a frozen wake during linearization. [-]
     LOGICAL  :: CavitCheck      !< Flag that tells us if we want to check for cavitation [-]
+    LOGICAL  :: PrescribedAD      !<  [flag]
+    REAL(ReKi)  :: PrescribedCt      !<  [flag]
+    REAL(ReKi)  :: SpanFracFullAD      !<  [flag]
+    REAL(ReKi)  :: FreeStream      !<  [flag]
     INTEGER(IntKi)  :: NumBlades      !< Number of blades on the turbine [-]
     INTEGER(IntKi)  :: NumBlNds      !< Number of nodes on each blade [-]
     INTEGER(IntKi)  :: NumTwrNds      !< Number of nodes on the tower [-]
@@ -2487,6 +2495,10 @@ ENDIF
     DstInputFileData%WakeMod = SrcInputFileData%WakeMod
     DstInputFileData%AFAeroMod = SrcInputFileData%AFAeroMod
     DstInputFileData%TwrPotent = SrcInputFileData%TwrPotent
+    DstInputFileData%PrescribedAD = SrcInputFileData%PrescribedAD
+    DstInputFileData%PrescribedCt = SrcInputFileData%PrescribedCt
+    DstInputFileData%SpanFracFullAD = SrcInputFileData%SpanFracFullAD
+    DstInputFileData%FreeStream = SrcInputFileData%FreeStream
     DstInputFileData%TwrShadow = SrcInputFileData%TwrShadow
     DstInputFileData%TwrAero = SrcInputFileData%TwrAero
     DstInputFileData%FrozenWake = SrcInputFileData%FrozenWake
@@ -2674,6 +2686,10 @@ ENDIF
       Int_BufSz  = Int_BufSz  + 1  ! WakeMod
       Int_BufSz  = Int_BufSz  + 1  ! AFAeroMod
       Int_BufSz  = Int_BufSz  + 1  ! TwrPotent
+      Int_BufSz  = Int_BufSz  + 1  ! PrescribedAD
+      Re_BufSz   = Re_BufSz   + 1  ! PrescribedCt
+      Re_BufSz   = Re_BufSz   + 1  ! SpanFracFullAD
+      Re_BufSz   = Re_BufSz   + 1  ! FreeStream
       Int_BufSz  = Int_BufSz  + 1  ! TwrShadow
       Int_BufSz  = Int_BufSz  + 1  ! TwrAero
       Int_BufSz  = Int_BufSz  + 1  ! FrozenWake
@@ -2796,6 +2812,14 @@ ENDIF
       Int_Xferred   = Int_Xferred   + 1
       IntKiBuf ( Int_Xferred:Int_Xferred+(1)-1 ) = InData%TwrPotent
       Int_Xferred   = Int_Xferred   + 1
+      IntKiBuf ( Int_Xferred:Int_Xferred+1-1 ) = TRANSFER( InData%PrescribedAD , IntKiBuf(1), 1)
+      Int_Xferred   = Int_Xferred   + 1
+      ReKiBuf ( Re_Xferred:Re_Xferred+(1)-1 ) = InData%PrescribedCt
+      Re_Xferred   = Re_Xferred   + 1
+      ReKiBuf ( Re_Xferred:Re_Xferred+(1)-1 ) = InData%SpanFracFullAD
+      Re_Xferred   = Re_Xferred   + 1
+      ReKiBuf ( Re_Xferred:Re_Xferred+(1)-1 ) = InData%FreeStream
+      Re_Xferred   = Re_Xferred   + 1
       IntKiBuf ( Int_Xferred:Int_Xferred+1-1 ) = TRANSFER( InData%TwrShadow , IntKiBuf(1), 1)
       Int_Xferred   = Int_Xferred   + 1
       IntKiBuf ( Int_Xferred:Int_Xferred+1-1 ) = TRANSFER( InData%TwrAero , IntKiBuf(1), 1)
@@ -3029,6 +3053,14 @@ ENDIF
       Int_Xferred   = Int_Xferred + 1
       OutData%TwrPotent = IntKiBuf( Int_Xferred ) 
       Int_Xferred   = Int_Xferred + 1
+      OutData%PrescribedAD = TRANSFER( IntKiBuf( Int_Xferred ), mask0 )
+      Int_Xferred   = Int_Xferred + 1
+      OutData%PrescribedCt = ReKiBuf( Re_Xferred )
+      Re_Xferred   = Re_Xferred + 1
+      OutData%SpanFracFullAD = ReKiBuf( Re_Xferred )
+      Re_Xferred   = Re_Xferred + 1
+      OutData%FreeStream = ReKiBuf( Re_Xferred )
+      Re_Xferred   = Re_Xferred + 1
       OutData%TwrShadow = TRANSFER( IntKiBuf( Int_Xferred ), mask0 )
       Int_Xferred   = Int_Xferred + 1
       OutData%TwrAero = TRANSFER( IntKiBuf( Int_Xferred ), mask0 )
@@ -5755,6 +5787,10 @@ ENDIF
     DstParamData%TwrAero = SrcParamData%TwrAero
     DstParamData%FrozenWake = SrcParamData%FrozenWake
     DstParamData%CavitCheck = SrcParamData%CavitCheck
+    DstParamData%PrescribedAD = SrcParamData%PrescribedAD
+    DstParamData%PrescribedCt = SrcParamData%PrescribedCt
+    DstParamData%SpanFracFullAD = SrcParamData%SpanFracFullAD
+    DstParamData%FreeStream = SrcParamData%FreeStream
     DstParamData%NumBlades = SrcParamData%NumBlades
     DstParamData%NumBlNds = SrcParamData%NumBlNds
     DstParamData%NumTwrNds = SrcParamData%NumTwrNds
@@ -5937,6 +5973,10 @@ ENDIF
       Int_BufSz  = Int_BufSz  + 1  ! TwrAero
       Int_BufSz  = Int_BufSz  + 1  ! FrozenWake
       Int_BufSz  = Int_BufSz  + 1  ! CavitCheck
+      Int_BufSz  = Int_BufSz  + 1  ! PrescribedAD
+      Re_BufSz   = Re_BufSz   + 1  ! PrescribedCt
+      Re_BufSz   = Re_BufSz   + 1  ! SpanFracFullAD
+      Re_BufSz   = Re_BufSz   + 1  ! FreeStream
       Int_BufSz  = Int_BufSz  + 1  ! NumBlades
       Int_BufSz  = Int_BufSz  + 1  ! NumBlNds
       Int_BufSz  = Int_BufSz  + 1  ! NumTwrNds
@@ -6079,6 +6119,14 @@ ENDIF
       Int_Xferred   = Int_Xferred   + 1
       IntKiBuf ( Int_Xferred:Int_Xferred+1-1 ) = TRANSFER( InData%CavitCheck , IntKiBuf(1), 1)
       Int_Xferred   = Int_Xferred   + 1
+      IntKiBuf ( Int_Xferred:Int_Xferred+1-1 ) = TRANSFER( InData%PrescribedAD , IntKiBuf(1), 1)
+      Int_Xferred   = Int_Xferred   + 1
+      ReKiBuf ( Re_Xferred:Re_Xferred+(1)-1 ) = InData%PrescribedCt
+      Re_Xferred   = Re_Xferred   + 1
+      ReKiBuf ( Re_Xferred:Re_Xferred+(1)-1 ) = InData%SpanFracFullAD
+      Re_Xferred   = Re_Xferred   + 1
+      ReKiBuf ( Re_Xferred:Re_Xferred+(1)-1 ) = InData%FreeStream
+      Re_Xferred   = Re_Xferred   + 1
       IntKiBuf ( Int_Xferred:Int_Xferred+(1)-1 ) = InData%NumBlades
       Int_Xferred   = Int_Xferred   + 1
       IntKiBuf ( Int_Xferred:Int_Xferred+(1)-1 ) = InData%NumBlNds
@@ -6330,6 +6378,14 @@ ENDIF
       Int_Xferred   = Int_Xferred + 1
       OutData%CavitCheck = TRANSFER( IntKiBuf( Int_Xferred ), mask0 )
       Int_Xferred   = Int_Xferred + 1
+      OutData%PrescribedAD = TRANSFER( IntKiBuf( Int_Xferred ), mask0 )
+      Int_Xferred   = Int_Xferred + 1
+      OutData%PrescribedCt = ReKiBuf( Re_Xferred )
+      Re_Xferred   = Re_Xferred + 1
+      OutData%SpanFracFullAD = ReKiBuf( Re_Xferred )
+      Re_Xferred   = Re_Xferred + 1
+      OutData%FreeStream = ReKiBuf( Re_Xferred )
+      Re_Xferred   = Re_Xferred + 1
       OutData%NumBlades = IntKiBuf( Int_Xferred ) 
       Int_Xferred   = Int_Xferred + 1
       OutData%NumBlNds = IntKiBuf( Int_Xferred ) 
