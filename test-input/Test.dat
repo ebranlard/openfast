@@ -1,0 +1,18 @@
+!A comment1
+%A comment2
+#A comment3
+---- comment 4
+#table name:MyTable row:2 , col:3     header:2,  format:ISF   ignored comment
+ Col1       Col2     Col3    ignored comment
+(Unit1)   (Unit2)    (unit3)  ignored comment
+   0         "a"      3.4     ignored comment
+   1         "b"      2       ignored comment
+-------------------
+0.0         SomeKey       ignored text
+0.0, 1.0    SomeKeyList   ignored text
+-------------------
+#outlist   Ignored comment
+"RotSpeed, RotPower"
+"GenSpeed"
+END
+
