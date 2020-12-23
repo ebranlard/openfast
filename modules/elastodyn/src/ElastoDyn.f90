@@ -292,7 +292,7 @@ SUBROUTINE ED_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
 
        ! Print the summary file if requested:
    IF (InputFileData%SumPrint) THEN
-      CALL ED_PrintSum( p, OtherState, GetAdamsVals, ErrStat2, ErrMsg2 )
+      CALL ED_PrintSum( p, x, m, u, OtherState, GetAdamsVals, ErrStat2, ErrMsg2 )
          CALL CheckError( ErrStat2, ErrMsg2 )
          IF (ErrStat >= AbortErrLev) RETURN
    END IF
@@ -10032,11 +10032,14 @@ CONTAINS
 END SUBROUTINE ED_ABM4
 !----------------------------------------------------------------------------------------------------------------------------------
 !> This routine generates the summary file, which contains a regurgitation of  the input data and interpolated flexible body data.
-SUBROUTINE ED_PrintSum( p, OtherState, GenerateAdamsModel, ErrStat, ErrMsg )
+SUBROUTINE ED_PrintSum( p, x, m, u, OtherState, GenerateAdamsModel, ErrStat, ErrMsg )
 
       ! passed variables
    TYPE(ED_ParameterType),    INTENT(IN   )  :: p                       !< Parameters of the structural dynamics module
+   TYPE(ED_InputType),        INTENT(IN   )  :: u                       !< Inputs at t (out only for mesh record-keeping in ExtrapInterp routine)
+   TYPE(ED_ContinuousStateType),INTENT(IN )  :: x                       !< Continuous states at t on input at t + dt on output
    TYPE(ED_OtherStateType),   INTENT(IN   )  :: OtherState              !< Other states of the structural dynamics module 
+   TYPE(ED_MiscVarType),      INTENT(INOUT)  :: m                       !< misc/optimization variables
    LOGICAL,                   INTENT(IN   )  :: GenerateAdamsModel      !< Logical to determine if Adams inputs were read/should be summarized
    INTEGER(IntKi),            INTENT(  OUT)  :: ErrStat                 !< Error status of the operation
    CHARACTER(*),              INTENT(  OUT)  :: ErrMsg                  !< Error message if ErrStat /= ErrID_None
@@ -10045,7 +10048,7 @@ SUBROUTINE ED_PrintSum( p, OtherState, GenerateAdamsModel, ErrStat, ErrMsg )
       ! Local variables.
 
    INTEGER(IntKi)               :: I                                               ! Index for the nodes.
-   INTEGER(IntKi)               :: K                                               ! Generic index (also for the blade number).
+   INTEGER(IntKi)               :: K,J                                             ! Generic index (also for the blade number).
    INTEGER(IntKi)               :: UnSu                                            ! I/O unit number for the summary output file
 
    CHARACTER(*), PARAMETER      :: Fmt1      = "(34X,3(6X,'Blade',I2,:))"          ! Format for outputting blade headings.
@@ -10059,6 +10062,15 @@ SUBROUTINE ED_PrintSum( p, OtherState, GenerateAdamsModel, ErrStat, ErrMsg )
    CHARACTER(10)                :: DOFEnabled                                      ! String to say if a DOF is enabled or disabled
    CHARACTER(ChanLen),PARAMETER :: TitleStr(2) = (/ 'Parameter', 'Units    ' /)
    CHARACTER(ChanLen),PARAMETER :: TitleStrLines(2) = (/ '---------------', '---------------' /)
+   REAL(ReKi)                   :: MBE       (1,1)                                 ! Generalized edgewise mass of the blades.
+   REAL(ReKi)                   :: MBF       (2,2)                                 ! Generalized flapwise mass of the blades.
+   REAL(ReKi)                   :: MTFA      (2,2)                                 ! Generalized fore-aft mass of the tower.
+   REAL(ReKi)                   :: MTSS      (2,2)                                 ! Generalized side-to-side mass of the tower.
+   REAL(ReKi)                   :: KTFAGrav  (2,2)                                 ! Gravitational-term of generalized fore-aft stiffness of the tower.
+   REAL(ReKi)                   :: KTSSGrav  (2,2)                                 ! Gravitational-term of generalized side-to-side stiffness of the tower.
+   REAL(ReKi)                   :: TMssAbvNd (p%TwrNodes)                          ! Portion of the tower mass associated with everything above node J (including tower-top effects)
+   REAL(ReKi)                   :: Shape1, Shape2, ElmntStff
+
 
    ! Open the summary file and give it a heading.
    
@@ -10172,6 +10184,119 @@ END IF
    !WRITE (UnSu,FmtDat ) '    Turbine Mass          (kg)    ', p%TurbMass
    WRITE (UnSu,FmtDat ) '    Platform Mass         (kg)    ', p%PtfmMass
    WRITE (UnSu,FmtDat ) '    Mass Incl. Platform   (kg)    ', p%TurbMass + p%PtfmMass !TotalMass !bjj TotalMass not used anywhere else so removed it
+
+   m%AugMat=0.0_ReKi
+   m%RtHS%GBoxEffFac  = p%GBoxEff
+   CALL CalculateAngularPosVelPAcc(p, x, m%CoordSys,    m%RtHS ) ! calculate angular positions, velocities, and partial accelerations, including partial angular quantities
+   CALL CalculateLinearVelPAcc(    p, x, m%CoordSys,    m%RtHS ) ! calculate linear velocities and partial accelerations
+   CALL CalculateForcesMoments(    p, x, m%CoordSys, u, m%RtHS ) ! calculate the forces and moments (requires AeroBladeForces and AeroBladeMoments)            
+   CALL FillAugMat( p, x, m%CoordSys, u, OtherState%HSSBrTrq, m%RtHS, m%AugMat )
+   WRITE (UnSu,'(//A)' ) '#   1_PtfmSgDOF   2_PtfmSwDOF   3_PtfmHvDOF   4_PtfmRDOF    5_PtfmPDOF    6_PtfmYDOF    7_TwFADOF1    8_TwSSDOF1    9_TwFADOF1    10_TwSSDOF2   11_Yaw        12_RFrl       13_GeAz       14_DrTr       15_TFrl       16_B1Flap1    17_B1Edge1    18_B1Flap2    19_B2Flap1    20_B2Edge1    21_B2Flap2    22_B3Flap1    23_B3Edge1    24_B3Flap2'
+   WRITE (UnSu,'(A)')  'Full system mass matrix at t=0:'
+   do I = 1,size(m%AugMat,1)
+      WRITE(UnSu,'(I2)', advance="no") I
+      do J = 1,size(m%AugMat,2)-1 ! Note: last column is force 
+         WRITE(UnSu,'(ES14.6)', advance="no")m%AugMat(I,J)
+      enddo
+      WRITE(UnSu,'(A)') ''
+   enddo
+   WRITE (UnSu,'(A)')  'Full system forcing at t=0:'
+   do I = 1,size(m%AugMat,1)
+      WRITE(UnSu,'(ES14.6)', advance="no")m%AugMat(I,p%NAug)
+   enddo
+   WRITE(UnSu,'(A)') ''
+   WRITE (UnSu,'(A)')  'Full system degrees of freedom at t=0 (position/velocities):'
+   do I = 1,size(m%AugMat,1)
+      WRITE(UnSu,'(ES14.6)', advance="no")x%QT(I)
+   enddo
+   WRITE(UnSu,'(A)') ''
+   do I = 1,size(m%AugMat,1)
+      WRITE(UnSu,'(ES14.6)', advance="no")x%QDT(I)
+   enddo
+   WRITE(UnSu,'(A)') ''
+
+
+   ! --- Tower
+   KTFAGrav=0.0_ReKi
+   KTSSGrav=0.0_ReKi
+   MTFA=0.0_ReKi
+   MTSS=0.0_ReKi
+   ! Integrate to find TMssAbvNd:
+   DO J = p%TwrNodes,1,-1 ! Loop through the tower nodes / elements in reverse
+      TMssAbvNd   (J) = 0.5*p%TElmntMass(J)
+      IF ( J == p%TwrNodes )  THEN ! Uppermost tower element
+         TMssAbvNd(J) = TMssAbvNd(J) + p%TwrTpMass
+      ELSE                       ! All other tower elements
+         TMssAbvNd(J) = 0.5*p%TElmntMass(J+1) + TMssAbvNd(J) + TMssAbvNd(J+1)
+      ENDIF
+   ENDDO
+   DO I = 1,2  ! Loop through all tower modes in a single direction
+      MTFA(I,I) = p%TwrTpMass
+      MTSS(I,I) = p%TwrTpMass
+      DO J = 1,p%TwrNodes    ! Loop through the tower nodes / elements
+         MTFA  (I,I) = MTFA  (I,I) + p%TElmntMass(J)*p%TwrFASF(I,J,0)**2
+         MTSS  (I,I) = MTSS  (I,I) + p%TElmntMass(J)*p%TwrSSSF(I,J,0)**2
+         ElmntStff      = -TMssAbvNd(J)*p%DHNodes(J)*p%Gravity              ! Gravitational stiffness of tower element J
+         KTFAGrav(I,I) = KTFAGrav(I,I) + ElmntStff*p%TwrFASF(I,J,1)**2
+         KTSSGrav(I,I) = KTSSGrav(I,I) + ElmntStff*p%TwrSSSF(I,J,1)**2
+      ENDDO  
+   ENDDO
+   WRITE (UNSU,'(A)'     )'Tower generalized frequencies (no top mass and stiffnening):'
+   WRITE (UNSU,'(4ES14.6)') p%FreqTFA(1,1), p%FreqTFA(2,1), p%FreqTSS(1,1), p%FreqTSS(2,1) 
+   WRITE (UNSU,'(A)'     )'Tower generalized frequencies (with top mass and stiffnening):'
+   WRITE (UNSU,'(4ES14.6)') p%FreqTFA(1,2), p%FreqTFA(2,2), p%FreqTSS(1,2), p%FreqTSS(2,2) 
+   WRITE (UNSU,'(A)'     ) 'Tower generalized mass matrix (without top mass):'
+   WRITE (UNSU,'(4ES14.6)') MTFA(1,1), MTFA(1,2), 0          , 0
+   WRITE (UNSU,'(4ES14.6)') MTFA(2,1), MTFA(2,2), 0          , 0
+   WRITE (UNSU,'(4ES14.6)') 0        , 0        , MTSS(1,1), MTSS(1,2)
+   WRITE (UNSU,'(4ES14.6)') 0        , 0        , MTSS(2,1), MTSS(2,2)
+   WRITE (UNSU,'(A)'     ) 'Tower generalized stiffness matrix (without stiffening):'
+   WRITE (UNSU,'(4ES14.6)') p%KTFA(1,1), p%KTFA(1,2), 0          , 0
+   WRITE (UNSU,'(4ES14.6)') p%KTFA(2,1), p%KTFA(2,2), 0          , 0
+   WRITE (UNSU,'(4ES14.6)') 0          , 0          , p%KTSS(1,1), p%KTSS(1,2)
+   WRITE (UNSU,'(4ES14.6)') 0          , 0          , p%KTSS(2,1), p%KTSS(2,2)
+   WRITE (UNSU,'(A)'     ) 'Tower generalized stiffness matrix (with stiffening):'
+   WRITE (UNSU,'(4ES14.6)') p%KTFA(1,1)+KTFAGrav(1,1), p%KTFA(1,2)              , 0           , 0
+   WRITE (UNSU,'(4ES14.6)') p%KTFA(2,1)              , p%KTFA(2,2)+KTFAGrav(2,2), 0          , 0
+   WRITE (UNSU,'(4ES14.6)') 0                        , 0                        , p%KTSS(1,1)+KTSSGrav(1,1), p%KTSS(1,2)
+   WRITE (UNSU,'(4ES14.6)') 0                        , 0                        , p%KTSS(2,1), p%KTSS(2,2)+KTSSGrav(2,2)
+   WRITE (UnSu,'(A)'     ) 'Tower generalized damping matrix:'
+   WRITE (UnSu,'(4ES14.6)') p%CTFA(1,1), p%CTFA(1,2), 0          , 0
+   WRITE (UnSu,'(4ES14.6)') p%CTFA(2,1), p%CTFA(2,2), 0          , 0
+   WRITE (UnSu,'(4ES14.6)') 0          , 0          , p%CTSS(1,1), p%CTSS(1,2)
+   WRITE (UnSu,'(4ES14.6)') 0          , 0          , p%CTSS(2,1), p%CTSS(2,2)
+
+   ! --- Blades
+   DO K = 1,p%NumBl ! Loop through all blades
+      WRITE (UNSU,'(A)'     ) 'Blade generalized frequencies (w/o centrifugal sitffening):'
+      WRITE (UnSu,'(3ES14.6)') p%FreqBF(K,1,2), p%FreqBF(K,2,2), p%FreqBE(K,1,2) 
+      WRITE (UNSU,'(A)'     ) 'Blade generalized frequencies (w/  centrifugal sitffening):'
+      WRITE (UnSu,'(3ES14.6)') p%FreqBF(K,1,3), p%FreqBF(K,2,3), p%FreqBE(K,1,3) 
+      ! Compute generalized mass
+      MBF(1,1) = p%TipMass(K)
+      MBF(2,2) = p%TipMass(K)
+      MBE(1,1) = p%TipMass(K)
+      DO J = 1,p%BldNodes    ! Loop through the blade nodes / elements
+         Shape1 = SHP( p%RNodesNorm(J), p%BldFlexL, p%BldFl1Sh(:,K), 0, ErrStat, ErrMsg )
+         Shape2 = SHP( p%RNodesNorm(J), p%BldFlexL, p%BldFl2Sh(:,K), 0, ErrStat, ErrMsg )
+         MBF(1,1) = MBF(1,1) + p%BElmntMass(J,K)*Shape1*Shape1
+         MBF(2,2) = MBF(2,2) + p%BElmntMass(J,K)*Shape2*Shape2
+         Shape1  = SHP( p%RNodesNorm(J), p%BldFlexL, p%BldEdgSh(:,K), 0, ErrStat, ErrMsg )
+         MBE(1,1) = MBE(1,1) + p%BElmntMass(J,K)*Shape1 *Shape1
+      ENDDO
+      WRITE (UnSu,'(A)'     ) 'Blade generalized mass matrix, Blade '//trim(num2lstr(K))//':'
+      WRITE (UnSu,'(3ES14.6)') MBF(1,1), MBF(1,2), 0
+      WRITE (UnSu,'(3ES14.6)') MBF(2,1), MBF(2,2), 0
+      WRITE (UnSu,'(3ES14.6)')    0    ,      0, MBE(1,1)
+      WRITE (UnSu,'(A)'     ) 'Blade generalized stiffness matrix, Blade '//trim(num2lstr(K))//':'
+      WRITE (UnSu,'(3ES14.6)') p%KBF(K,1,1), p%KBF(K,1,2), 0
+      WRITE (UnSu,'(3ES14.6)') p%KBF(K,2,1), p%KBF(K,2,2), 0
+      WRITE (UnSu,'(3ES14.6)')      0      ,      0      , p%KBE(K,1,1)
+      WRITE (UnSu,'(A)'     ) 'Blade generalized damping matrix, Blade '//trim(num2lstr(K))//':'
+      WRITE (UnSu,'(3ES14.6)') p%CBF(K,1,1), p%CBF(K,1,2), 0
+      WRITE (UnSu,'(3ES14.6)') p%CBF(K,2,1), p%CBF(K,2,2), 0
+      WRITE (UnSu,'(3ES14.6)')      0      ,      0      , p%CBE(K,1,1)
+   ENDDO
 
 
       ! Interpolated tower properties.
