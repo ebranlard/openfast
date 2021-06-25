@@ -37,8 +37,17 @@ option(CTEST_PLOT_ERRORS "Generate plots of regression test errors." OFF)
 # Set the OpenFAST executable configuration option and default
 set(CTEST_OPENFAST_EXECUTABLE "${CMAKE_BINARY_DIR}/glue-codes/openfast/openfast" CACHE FILEPATH "Specify the OpenFAST executable to use in testing.")
 
+# Set the AeroDyn executable configuration option and default
+set(CTEST_AERODYN_EXECUTABLE "${CMAKE_BINARY_DIR}/modules/aerodyn/aerodyn_driver" CACHE FILEPATH "Specify the AeroDyn driver executable to use in testing.")
+
 # Set the BeamDyn executable configuration option and default
 set(CTEST_BEAMDYN_EXECUTABLE "${CMAKE_BINARY_DIR}/modules/beamdyn/beamdyn_driver" CACHE FILEPATH "Specify the BeamDyn driver executable to use in testing.")
+
+# Set the HydroDyn executable configuration option and default
+set(CTEST_HYDRODYN_EXECUTABLE "${CMAKE_BINARY_DIR}/modules/hydrodyn/hydrodyn_driver" CACHE FILEPATH "Specify the HydroDyn driver executable to use in testing.")
+
+# Set the SubDyn executable configuration option and default
+set(CTEST_SUBDYN_EXECUTABLE "${CMAKE_BINARY_DIR}/modules/subdyn/subdyn_driver" CACHE FILEPATH "Specify the SubDyn driver executable to use in testing.")
 
 # Set the python executable configuration option and default
 if(NOT EXISTS ${PYTHON_EXECUTABLE})
@@ -61,7 +70,7 @@ add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/r-test")
 
 # build and seed the test directories with the data they need to run the tests
 file(MAKE_DIRECTORY ${CTEST_BINARY_DIR})
-foreach(regTest glue-codes/openfast modules/beamdyn)
+foreach(regTest glue-codes/openfast modules/aerodyn modules/beamdyn modules/hydrodyn modules/subdyn)
   file(MAKE_DIRECTORY ${CTEST_BINARY_DIR}/${regTest})
 endforeach()
 
@@ -73,3 +82,26 @@ endforeach()
 
 # add the tests
 include(${CMAKE_CURRENT_LIST_DIR}/CTestList.cmake)
+
+set(src "${CMAKE_CURRENT_LIST_DIR}/r-test/glue-codes/openfast/5MW_Baseline/ServoData")
+set(dest "${CTEST_BINARY_DIR}/glue-codes/openfast/5MW_Baseline/ServoData/")
+add_custom_command(
+  OUTPUT "${dest}/DISCON.dll"
+  DEPENDS DISCON
+  COMMAND "${CMAKE_COMMAND}" -E copy "${src}/DISCON/build/DISCON.dll" "${dest}"
+)
+add_custom_command(
+  OUTPUT "${dest}/DISCON_ITIBarge.dll"
+  DEPENDS DISCON_ITIBarge
+  COMMAND "${CMAKE_COMMAND}" -E copy "${src}/DISCON_ITI/build/DISCON_ITIBarge.dll" "${dest}"
+  )
+add_custom_command(
+  OUTPUT "${dest}/DISCON_OC3Hywind.dll"
+  DEPENDS DISCON_OC3Hywind
+  COMMAND "${CMAKE_COMMAND}" -E copy "${src}/DISCON_OC3/build/DISCON_OC3Hywind.dll" "${dest}"
+)
+
+add_custom_target(
+  regression_tests
+  DEPENDS openfast "${dest}/DISCON.dll" "${dest}/DISCON_ITIBarge.dll" "${dest}/DISCON_OC3Hywind.dll"
+)

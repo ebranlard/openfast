@@ -35,6 +35,7 @@ endif()
 include(ExternalProject)
 set(ExternalProjectCMakeArgs
   -DCMAKE_INSTALL_PREFIX=${PROJECT_BINARY_DIR}/pfunit
+  -DCMAKE_Fortran_COMPILER=${CMAKE_Fortran_COMPILER}
   -DROBUST=OFF
 )
 set(PFUNIT_INSTALL ${PROJECT_BINARY_DIR}/pfunit)
@@ -70,3 +71,10 @@ endif()
 ### Add the unit tests here
 add_subdirectory("beamdyn")
 add_subdirectory("nwtc-library")
+add_subdirectory("aerodyn")
+add_subdirectory("inflowwind")
+
+add_custom_target(
+  unit_tests
+  DEPENDS beamdyn_utest nwtc_library_utest fvw_utest inflowwind_utest
+)
