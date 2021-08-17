@@ -724,7 +724,8 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
          ! dx      = xd%x_plane(i) - xd%x_plane(i-1)
          ! This is equivalent to
       
-      dx = dot_product(xd%xhat_plane(:,i-1),xd%V_plane_filt(:,i-1))*p%DT_low
+      !dx = dot_product(xd%xhat_plane(:,i-1),xd%V_plane_filt(:,i-1))*p%DT_low
+      dx = dot_product(xd%xhat_plane(:,i-1),u%V_plane(:,i-1))*p%DT_low
       absdx = abs(dx)
       if ( EqualRealNos( dx, 0.0_ReKi ) ) absdx = 1.0_ReKi  ! This is to avoid division by zero problems in the formation of m%b and m%d below, which are not used when dx=0; the value of unity is arbitrary
       
