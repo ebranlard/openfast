@@ -2144,6 +2144,7 @@ SUBROUTINE ElemM(ep, Me)
    TYPE(ElemPropType), INTENT(IN) :: eP        !< Element Property
    REAL(FEKi), INTENT(OUT)        :: Me(12, 12)
    REAL(FEKi) :: L0, Eps0
+   REAL(FEKi) :: Me_T(12, 12)
    if (ep%eType==idMemberBeam) then
       !Calculate Ke, Me to be used for output
       CALL ElemM_Beam(eP%Area, eP%Length, eP%Ixx, eP%Iyy, eP%Jzz,  eP%rho, eP%DirCos, Me)
@@ -2161,11 +2162,15 @@ SUBROUTINE ElemM(ep, Me)
          !CALL ElemM_(A, L, rho, DirCos, Me)
       endif
    endif
+   ! Forcing symmetry
+   Me_T = transpose(Me)
+   Me   = (Me + Me_T)*0.5_FeKi
 END SUBROUTINE ElemM
 
 SUBROUTINE ElemK(ep, Ke)
    TYPE(ElemPropType), INTENT(IN) :: eP        !< Element Property
    REAL(FEKi), INTENT(OUT)        :: Ke(12, 12)
+   REAL(FEKi) :: Ke_T(12, 12)
 
    if (ep%eType==idMemberBeam) then
       CALL ElemK_Beam( eP%Area, eP%Length, eP%Ixx, eP%Iyy, eP%Jzz, eP%Shear, eP%kappa, eP%YoungE, eP%ShearG, eP%DirCos, Ke)
@@ -2176,6 +2181,9 @@ SUBROUTINE ElemK(ep, Ke)
    else if (ep%eType==idMemberRigid) then
       Ke = 0.0_FEKi
    endif
+   ! Forcing symmetry
+   Ke_T = transpose(Ke)
+   Ke   = (Ke + Ke_T)*0.5_FeKi
 END SUBROUTINE ElemK
 
 SUBROUTINE ElemF(ep, gravity, Fg, Fo)
