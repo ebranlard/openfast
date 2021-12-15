@@ -3471,7 +3471,7 @@ END SUBROUTINE WriteJSONCommon
 SUBROUTINE OutSummary(Init, p, m, InitInput, CBparams, Modes, Omega, Omega_Gy, ErrStat,ErrMsg)
    use Yaml
    TYPE(SD_InitType),          INTENT(INOUT)  :: Init           ! Input data for initialization routine
-   TYPE(SD_ParameterType),     INTENT(IN)     :: p              ! Parameters
+   TYPE(SD_ParameterType),     INTENT(IN   )  :: p              ! Parameters
    TYPE(SD_MiscVarType)  ,     INTENT(IN)     :: m              ! Misc
    TYPE(SD_InitInputType),     INTENT(IN)     :: InitInput   !< Input data for initialization routine         
    TYPE(CB_MatArrays),         INTENT(IN)     :: CBparams       ! CB parameters that will be passed in for summary file use
@@ -3776,6 +3776,33 @@ SUBROUTINE OutSummary(Init, p, m, InitInput, CBparams, Modes, Omega, Omega_Gy, E
    WRITE(UnSum, '(A)') SectionDivide
    WRITE(UnSum, '(A)') '# ADDITIONAL DEBUGGING INFORMATION'
    WRITE(UnSum, '(A)') SectionDivide
+   !write(UnSum, '(11(ES15.6e2))')Init%g, p%ElemProps(1)%Area, p%ElemProps(1)%Length, p%ElemProps(1)%Ixx, p%ElemProps(1)%Iyy, p%ElemProps(1)%Jzz, p%ElemProps(1)%kappa, p%ElemProps(1)%YoungE, p%ElemProps(1)%ShearG, p%ElemProps(1)%rho, p%ElemProps(1)%rho*p%ElemProps(1)%Area* p%ElemProps(1)%Length
+   !do i=1,size(p%ElemProps)
+   !   ! --- Element Me,Ke,Fg, Fce
+   !   CALL ElemM(p%ElemProps(i), Me)
+   !   CALL ElemK(p%ElemProps(i), Ke)
+   !   CALL ElemF(p%ElemProps(i), Init%g, FGe, FCe)
+   !   !CALL ElemM_Beam(eP%Area, eP%Length, eP%Ixx, eP%Iyy, eP%Jzz,  eP%rho, eP%DirCos, Me)
+   !   !Eps0 = ep%T0/(ep%YoungE*ep%Area)
+   !   !L0   = ep%Length/(1+Eps0)  ! "rest length" for which pretension would be 0
+   !   !CALL ElemM_Cable(ep%Area, real(ep%Length,FEKi), ep%rho, ep%DirCos, Me)
+   !   !CALL ElemK_Cable(ep%Area, ep%Length, ep%YoungE, ep%T0, eP%DirCos, Ke)
+   !   !call yaml_write_var(UnSum, 'nNodes_I', p%nNodes_I,IFmt, ErrStat2, ErrMsg2, comment='Number of Nodes: "interface" (I)')
+   !   call yaml_write_array(UnSum,  'DC'//trim(num2lstr(i)),p%ElemProps(i)%DirCos, ReFmt, ErrStat2, ErrMsg2)
+   !   call yaml_write_array(UnSum,  'Ke'//trim(num2lstr(i)),Ke, ReFmt, ErrStat2, ErrMsg2)
+   !   call yaml_write_array(UnSum,  'Me'//trim(num2lstr(i)),Me, ReFmt, ErrStat2, ErrMsg2)
+   !   call yaml_write_array(UnSum, 'FGe'//trim(num2lstr(i)),FGe, ReFmt, ErrStat2, ErrMsg2)
+   !   call yaml_write_array(UnSum, 'FCe'//trim(num2lstr(i)),FCe, ReFmt, ErrStat2, ErrMsg2)
+
+   !   p%ElemProps(i)%DirCos = DirCos
+   !   CALL ElemM(p%ElemProps(i), Me)
+   !   CALL ElemK(p%ElemProps(i), Ke)
+   !   CALL ElemF(p%ElemProps(i), Init%g, FGe, FCe)
+   !   call yaml_write_array(UnSum,  'KeLocal'//trim(num2lstr(i)),Ke, ReFmt, ErrStat2, ErrMsg2)
+   !   call yaml_write_array(UnSum,  'MeLocal'//trim(num2lstr(i)),Me, ReFmt, ErrStat2, ErrMsg2)
+   !   call yaml_write_array(UnSum, 'FGeLocal'//trim(num2lstr(i)),FGe, ReFmt, ErrStat2, ErrMsg2)
+   !   call yaml_write_array(UnSum, 'FCeLocal'//trim(num2lstr(i)),FCe, ReFmt, ErrStat2, ErrMsg2)
+   !enddo
 
    ! --- Element Me,Ke,Fg, Fce
    CALL ElemM(p%ElemProps(1), Me)
