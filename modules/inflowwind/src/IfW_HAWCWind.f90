@@ -266,7 +266,8 @@ SUBROUTINE ReadTurbulenceData(p, InitInp, ErrStat, ErrMsg)
          CALL SetErrStat(TmpErrStat, TmpErrMsg, ErrStat, ErrMsg, RoutineName) 
          IF (ErrStat >= AbortErrLev) RETURN
 
-      DO IX = 1,p%FF%NFFSteps
+      DO IX = p%FF%NFFSteps,1,-1
+!      DO IX = 1,p%FF%NFFSteps    ! This order leads again to the issue #256 reported on Github
          DO IY = p%FF%NYGrids,1,-1
             !DO IZ = 1,p%FF%NZGrids
 

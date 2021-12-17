@@ -247,6 +247,8 @@ SUBROUTINE Farm_Initialize( farm, InputFile, ErrStat, ErrMsg )
    AWAE_InitInput%n_high_low                 = farm%p%n_high_low
    AWAE_InitInput%NumDT                      = farm%p%n_TMax
    AWAE_InitInput%OutFileRoot                = farm%p%OutFileRoot
+!   ! Wake Added Turbulence Parameters
+   AWAE_InitInput%InputFileData%WkAdT        = WD_InitInput%InputFileData%WkAdT
    call AWAE_Init( AWAE_InitInput, farm%AWAE%u, farm%AWAE%p, farm%AWAE%x, farm%AWAE%xd, farm%AWAE%z, farm%AWAE%OtherSt, farm%AWAE%y, &
                    farm%AWAE%m, farm%p%DT_low, AWAE_InitOutput, ErrStat2, ErrMsg2 )
       CALL SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
@@ -1042,7 +1044,114 @@ SUBROUTINE Farm_ReadPrimaryFile( InputFile, p, WD_InitInp, AWAE_InitInp, SC_Init
          call cleanup()
          RETURN        
       end if            
+       ! Switch for turning on and off wake-added turbulence:
+   CALL ReadVar( UnIn, InputFile, WD_InitInp%WkAdT, "WkAdT", "Switch for turning on and off wake-added turbulence", ErrStat2, ErrMsg2, UnEc)
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      if ( ErrStat >= AbortErrLev ) then
+         call cleanup()
+         RETURN        
+      end if
 
+      ! WkAdTinflowFile - Name of file containing InflowWind module input parameters for wake added turbulence(quoted string):
+   CALL ReadVar( UnIn, InputFile, AWAE_InitInp%WkAdTinflowFile, "InflowFile", "Name of file containing InflowWind module input parameters for wake added turbulence(quoted string)", ErrStat2, ErrMsg2, UnEc)
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      if ( ErrStat >= AbortErrLev ) then
+         call cleanup()
+         RETURN        
+      end if
+   IF ( PathIsRelative( AWAE_InitInp%WkAdTinflowFile ) )AWAE_InitInp%WkAdTinflowFile = TRIM(PriPath)//TRIM(AWAE_InitInp%WkAdTinflowFile)
+
+      ! nX_WkAdT - Number  of spatial nodes in X direction for wake-added turbulence grid (-) [>=2]:
+   CALL ReadVar( UnIn, InputFile, AWAE_InitInp%nX_WkAdT, "nX_WkAdT", "Number  of spatial nodes in X direction for wake-added turbulence grid (-) [>=2]", ErrStat2, ErrMsg2, UnEc)
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      if ( ErrStat >= AbortErrLev ) then
+         call cleanup()
+         RETURN        
+      end if
+	  
+      ! nY_WkAdT - Number  of spatial nodes in Y direction for wake-added turbulence grid (-) [>=2]:
+   CALL ReadVar( UnIn, InputFile, AWAE_InitInp%nY_WkAdT, "nY_WkAdT", "Number  of spatial nodes in Y direction for wake-added turbulence grid (-) [>=2]", ErrStat2, ErrMsg2, UnEc)
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      if ( ErrStat >= AbortErrLev ) then
+         call cleanup()
+         RETURN        
+      end if      
+
+      ! nZ_WkAdT - Number  of spatial nodes in Z direction for wake-added turbulence grid (-) [>=2]:
+   CALL ReadVar( UnIn, InputFile, AWAE_InitInp%nZ_WkAdT, "nZ_WkAdT", "Number  of spatial nodes in Z direction for wake-added turbulence grid (-) [>=2]", ErrStat2, ErrMsg2, UnEc)
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      if ( ErrStat >= AbortErrLev ) then
+         call cleanup()
+         RETURN        
+      end if
+	  
+      ! X0_WkAdT - Origin  of spatial nodes in X direction for wake-added turbulence grid (m):
+   CALL ReadVar( UnIn, InputFile, AWAE_InitInp%X0_WkAdT, "X0_WkAdT", "Origin  of spatial nodes in X direction for wake-added turbulence grid (m)", ErrStat2, ErrMsg2, UnEc)
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      if ( ErrStat >= AbortErrLev ) then
+         call cleanup()
+         RETURN        
+      end if
+
+      ! Y0_WkAdT - Origin  of spatial nodes in Y direction for wake-added turbulence grid (m):
+   CALL ReadVar( UnIn, InputFile, AWAE_InitInp%Y0_WkAdT, "Y0_WkAdT", "Origin  of spatial nodes in Y direction for wake-added turbulence grid (m)", ErrStat2, ErrMsg2, UnEc)
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      if ( ErrStat >= AbortErrLev ) then
+         call cleanup()
+         RETURN        
+      end if
+	  
+      ! Z0_WkAdT - Origin  of spatial nodes in Z direction for wake-added turbulence grid (m):
+   CALL ReadVar( UnIn, InputFile, AWAE_InitInp%Z0_WkAdT, "Z0_WkAdT", "Origin  of spatial nodes in Z direction for wake-added turbulence grid (m)", ErrStat2, ErrMsg2, UnEc)
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      if ( ErrStat >= AbortErrLev ) then
+         call cleanup()
+         RETURN        
+      end if
+
+      ! dX_WkAdT -Spacing of spatial nodes in X direction for wake-added turbulence grid (m) [>0.0]:
+   CALL ReadVar( UnIn, InputFile, AWAE_InitInp%dX_WkAdT, "dX_WkAdT", "Spacing of spatial nodes in X direction for wake-added turbulence grid (m) [>0.0]", ErrStat2, ErrMsg2, UnEc)
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      if ( ErrStat >= AbortErrLev ) then
+         call cleanup()
+         RETURN        
+      end if
+      
+      ! dY_WkAdT -Spacing of spatial nodes in Y direction for wake-added turbulence grid (m) [>0.0]:
+   CALL ReadVar( UnIn, InputFile, AWAE_InitInp%dY_WkAdT, "dY_WkAdT", "Spacing of spatial nodes in Y direction for wake-added turbulence grid (m) [>0.0]", ErrStat2, ErrMsg2, UnEc)
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      if ( ErrStat >= AbortErrLev ) then
+         call cleanup()
+         RETURN        
+      end if
+
+      ! dZ_WkAdT -Spacing of spatial nodes in Z direction for wake-added turbulence grid (m) [>0.0]:
+   CALL ReadVar( UnIn, InputFile, AWAE_InitInp%dZ_WkAdT, "dZ_WkAdT", "Spacing of spatial nodes in Z direction for wake-added turbulence grid (m) [>0.0]", ErrStat2, ErrMsg2, UnEc)
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      if ( ErrStat >= AbortErrLev ) then
+         call cleanup()
+         RETURN        
+      end if
+
+      ! k_m1_WkAdT - Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.6]:
+   CALL ReadVarWDefault( UnIn, InputFile, WD_InitInp%k_m1_WkAdT, "k_m1_WkAdT", &
+      "Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.6]", &
+      0.6_ReKi, ErrStat2, ErrMsg2, UnEc)
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      if ( ErrStat >= AbortErrLev ) then
+         call cleanup()
+         RETURN        
+      end if	  
+	  
+      ! k_m2_WkAdT - Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.6]:
+   CALL ReadVarWDefault( UnIn, InputFile, WD_InitInp%k_m2_WkAdT, "k_m2_WkAdT", &
+      "Calibrated parameter for the influence of the radial velocity gradient of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.35]", &
+      0.35_ReKi, ErrStat2, ErrMsg2, UnEc)
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      if ( ErrStat >= AbortErrLev ) then
+         call cleanup()
+         RETURN        
+      end if	
    !---------------------- VISUALIZATION --------------------------------------------------
    CALL ReadCom( UnIn, InputFile, 'Section Header: Visualization', ErrStat2, ErrMsg2, UnEc )
       CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
@@ -1413,6 +1522,8 @@ SUBROUTINE Farm_ValidateInput( p, WD_InitInp, AWAE_InitInp, SC_InitInp, ErrStat,
       CALL SetErrStat(ErrID_Fatal,'C_Meander parameter must not be less than 1.',ErrStat,ErrMsg,RoutineName)
    END IF
          
+   IF (WD_InitInp%k_m1_WkAdT  <= 0.0_Reki) CALL SetErrStat(ErrID_Fatal,'k_m1_WkAdT parameter must be positive.',ErrStat,ErrMsg,RoutineName)
+   IF (WD_InitInp%k_m2_WkAdT  <= 0.0_Reki) CALL SetErrStat(ErrID_Fatal,'k_m2_WkAdT parameter must be positive.',ErrStat,ErrMsg,RoutineName)																												   
    !--- OUTPUT ---
    IF ( p%n_ChkptTime < 1_IntKi   ) CALL SetErrStat( ErrID_Fatal, 'ChkptTime must be greater than 0 seconds.', ErrStat, ErrMsg, RoutineName )
    IF (p%TStart < 0.0_ReKi) CALL SetErrStat(ErrID_Fatal,'TStart must not be negative.',ErrStat,ErrMsg,RoutineName)
@@ -1668,6 +1779,7 @@ subroutine FARM_InitialCO(farm, ErrStat, ErrMsg)
    farm%AWAE%u%Vx_wake    = 0.0_ReKi     ! Axial wake velocity deficit at wake planes, distributed radially, for each turbine
    farm%AWAE%u%Vr_wake    = 0.0_ReKi     ! Radial wake velocity deficit at wake planes, distributed radially, for each turbine
    farm%AWAE%u%D_wake     = 0.0_ReKi     ! Wake diameters at wake planes for each turbine      
+   farm%AWAE%m%VwkAdT     = 0.0_SiKi     ! Wake added turbulence velocities    
    
       !--------------------
       ! 1b. CALL AWAE_CO      
@@ -2382,6 +2494,8 @@ SUBROUTINE Transfer_WD_to_AWAE(farm)
       farm%AWAE%u%Vx_wake(:,:,nt)    = farm%WD(nt)%y%Vx_wake        ! Axial wake velocity deficit at wake planes, distributed radially, for each turbine
       farm%AWAE%u%Vr_wake(:,:,nt)    = farm%WD(nt)%y%Vr_wake        ! Radial wake velocity deficit at wake planes, distributed radially, for each turbine
       farm%AWAE%u%D_wake(:,nt)       = farm%WD(nt)%y%D_wake         ! Wake diameters at wake planes for each turbine      
+      farm%AWAE%u%k_mt(:,:,nt)       = farm%WD(nt)%y%k_mt           ! Scaling factor k_mt(r,x) for wake-added turbulence    
+      farm%AWAE%u%x_plane(:,nt)      = farm%WD(nt)%y%x_plane        ! Downwind distance from rotor to each wake plane
    END DO
    
 END SUBROUTINE Transfer_WD_to_AWAE

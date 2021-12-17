@@ -433,6 +433,10 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
    p%k_vShr        = InitInp%InputFileData%k_vShr      
    p%Mod_WakeDiam  = InitInp%InputFileData%Mod_WakeDiam
    p%C_WakeDiam    = InitInp%InputFileData%C_WakeDiam  
+   ! Wake-Added Turbulence variables
+   p%WkAdT         = InitInp%InputFileData%WkAdT  
+   p%k_m1_WkAdT    = InitInp%InputFileData%k_m1_WkAdT  
+   p%k_m2_WkAdT    = InitInp%InputFileData%k_m2_WkAdT								 
    
    allocate( p%r(0:p%NumRadii-1),stat=errStat2)
       if (errStat2 /= 0) then
@@ -494,6 +498,8 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
       if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for xd%Vx_wake.', errStat, errMsg, RoutineName )   
    allocate ( xd%Vr_wake     (0:p%NumRadii-1,0:p%NumPlanes-1) , STAT=ErrStat2 )
       if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for xd%Vr_wake.', errStat, errMsg, RoutineName )   
+   allocate ( xd%k_mt        (0:p%NumRadii-1, 0:p%NumPlanes-1 ) , STAT=ErrStat2 )
+      if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for xd%k_mt.', errStat, errMsg, RoutineName )  
    if (errStat /= ErrID_None) return
 
    xd%xhat_plane          = 0.0_ReKi
@@ -507,6 +513,7 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
    xd%D_rotor_filt        = 0.0_ReKi
    xd%Vx_rel_disk_filt    = 0.0_ReKi
    xd%Ct_azavg_filt       = 0.0_ReKi
+   xd%k_mt                = 0.0_ReKi
    OtherState%firstPass            = .true.     
    
       ! miscvars to avoid the allocation per timestep
@@ -533,8 +540,11 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
       if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%r_wake.', errStat, errMsg, RoutineName )  
    allocate (    m%Vx_high(0:p%NumRadii-1 ) , STAT=ErrStat2 )
       if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%Vx_high.', errStat, errMsg, RoutineName )  
+   allocate (    m%Vx_wind_disk_Plane(0:p%NumPlanes-1 ) , STAT=ErrStat2 )
+      if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%Vx_wind_disk_Plane.', errStat, errMsg, RoutineName )  
    if (errStat /= ErrID_None) return
    
+   m%Vx_wind_disk_Plane         = 0.0_ReKi  
       !............................................................................................
       ! Define initialization output here
       !............................................................................................
@@ -553,6 +563,8 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
       if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for y%D_wake.', errStat, errMsg, RoutineName )  
    allocate ( y%x_plane   (0:p%NumPlanes-1), STAT=ErrStat2 )
       if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for y%x_plane.', errStat, errMsg, RoutineName )  
+   allocate ( y%k_mt        (0:p%NumRadii-1, 0:p%NumPlanes-1 ) , STAT=ErrStat2 )
+      if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for y%k_mt.', errStat, errMsg, RoutineName )  
    if (errStat /= ErrID_None) return
    
    y%xhat_plane = 0.0_Reki
@@ -561,8 +573,8 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
    y%Vr_wake    = 0.0_Reki
    y%D_wake     = 0.0_Reki
    y%x_plane    = 0.0_Reki
-
-      
+   y%k_mt       = 0.0_Reki
+   
 end subroutine WD_Init
 
 !----------------------------------------------------------------------------------------------------------------------------------
@@ -658,6 +670,9 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
    errMsg  = ""
    
    
+   ! Put new u%x_wind_disk into  m%Vx_wind_disk_Plane array
+   m%Vx_wind_disk_Plane(2:p%NumPlanes-1) = m%Vx_wind_disk_Plane(1:p%NumPlanes-2)
+   m%Vx_wind_disk_Plane(1) = u%Vx_wind_disk
    if ( EqualRealNos(u%D_Rotor,0.0_ReKi) .or. u%D_Rotor < 0.0_ReKi ) then
       ! TEST: E7
       call SetErrStat(ErrID_Fatal, 'Rotor diameter must be greater than zero.', errStat, errMsg, RoutineName)
@@ -823,7 +838,31 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
          end do  
       end if
    end do ! i = 1,min(n+2,p%NumPlanes-1) 
- 
+  
+   ! Calculate scaling factor k_mt for wake-added Turbulence
+   if ( p%WkAdT ) then
+   
+      do i = 1,maxPln  
+         do j = 0,p%NumRadii-1      
+            if ( j == 0 ) then
+               m%dvdr(j) = ( xd%Vx_wake(2,i) - xd%Vx_wake(0,i) ) / (2_ReKi*p%dr/(u%D_Rotor/2))
+            elseif (j <= p%NumRadii-2) then
+               m%dvdr(j) = ( xd%Vx_wake(j+1,i) - xd%Vx_wake(j-1,i) ) / (2_ReKi*p%dr/(u%D_Rotor/2))
+            else
+               m%dvdr(j) = - xd%Vx_wake(j-1,i)  / (2_ReKi*p%dr/(u%D_Rotor/2))
+            end if
+      
+            ! Calculate scaling factor m%k_mt for wake-added turbulence
+            if ( EqualRealNos( m%Vx_wind_disk_Plane(i), 0.0_ReKi ) ) THEN
+	            xd%k_mt(j,i) = 0.0_ReKi
+	        else
+	   	        xd%k_mt(j,i) = p%k_m1_WkAdT * abs(1 - ((m%Vx_wind_disk_Plane(i)+xd%Vx_wake(j,i))/m%Vx_wind_disk_Plane(i)) ) &
+	   	                       + p%k_m2_WkAdT/m%Vx_wind_disk_Plane(i) * abs(m%dvdr(j))
+	        end if
+         end do	  
+      end do	    
+      
+   end if
 
       
       ! Update states at disk-plane to [n+1] 
@@ -955,6 +994,7 @@ subroutine WD_CalcOutput( t, u, p, x, xd, z, OtherState, y, m, errStat, errMsg )
       y%xhat_plane = xd%xhat_plane
       y%Vx_wake    = xd%Vx_wake
       y%Vr_wake    = xd%Vr_wake
+	   y%k_mt       = xd%k_mt
       do i = 0, min(n+1,p%NumPlanes-1)
          
          y%D_wake(i)  =  WakeDiam( p%Mod_WakeDiam, p%NumRadii, p%dr, p%r, xd%Vx_wake(:,i), xd%Vx_wind_disk_filt(i), xd%D_rotor_filt(i), p%C_WakeDiam)

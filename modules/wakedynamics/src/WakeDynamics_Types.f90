@@ -60,6 +60,9 @@ IMPLICIT NONE
     REAL(ReKi)  :: C_vShr_Exp      !< Calibrated parameter in the eddy viscosity filter function for the shear layer defining the exponent in the exponential region [> 0.0] [-]
     INTEGER(IntKi)  :: Mod_WakeDiam      !< Wake diameter calculation model {1: rotor diameter, 2: velocity-based, 3: mass-flux based, 4: momentum-flux based} [DEFAULT=1] [-]
     REAL(ReKi)  :: C_WakeDiam      !< Calibrated parameter for wake diameter calculation [>0.0 and <1.0] [unused for Mod_WakeDiam=1] [-]
+    LOGICAL  :: WkAdT      !< Switch for turning on and off wake-added turbulence [-]
+    REAL(ReKi)  :: k_m1_WkAdT      !< Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.6] [-]
+    REAL(ReKi)  :: k_m2_WkAdT      !< Calibrated parameter for the influence of the radial velocity gradient of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.35] [-]
   END TYPE WD_InputFileType
 ! =======================
 ! =========  WD_InitInputType  =======
@@ -94,6 +97,7 @@ IMPLICIT NONE
     REAL(ReKi)  :: Vx_rel_disk_filt      !< Time-filtered rotor-disk-averaged relative wind speed (ambient + deficits + motion), normal to disk [m/s]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: Ct_azavg_filt      !< Time-filtered azimuthally averaged thrust force coefficient (normal to disk), distributed radially [-]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: YawErr_filt      !< Time-filtered nacelle-yaw error at the wake planes [rad]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: k_mt      !< Scaling factor k_mt(r,x) for wake-added turbulence [-]
   END TYPE WD_DiscreteStateType
 ! =======================
 ! =========  WD_ConstraintStateType  =======
@@ -119,6 +123,7 @@ IMPLICIT NONE
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: d      !<  [-]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: r_wake      !<  [-]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: Vx_high      !<  [-]
+    REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: Vx_wind_disk_Plane      !< Rotor-disk-averaged ambient wind speed, normal to planes in each wake plane [m/s]
   END TYPE WD_MiscVarType
 ! =======================
 ! =========  WD_ParameterType  =======
@@ -147,6 +152,9 @@ IMPLICIT NONE
     REAL(ReKi)  :: k_vShr      !< Calibrated parameter for the influence of the shear layer in the eddy viscosity [-]
     INTEGER(IntKi)  :: Mod_WakeDiam      !< Wake diameter calculation model [-]
     REAL(ReKi)  :: C_WakeDiam      !< Calibrated parameter for wake diameter calculation [-]
+    LOGICAL  :: WkAdT      !< Switch for turning on and off wake-added turbulence [-]
+    REAL(ReKi)  :: k_m1_WkAdT      !< Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.6] [-]
+    REAL(ReKi)  :: k_m2_WkAdT      !< Calibrated parameter for the influence of the radial velocity gradient of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.35] [-]
   END TYPE WD_ParameterType
 ! =======================
 ! =========  WD_InputType  =======
@@ -170,6 +178,7 @@ IMPLICIT NONE
     REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: Vr_wake      !< Radial wake velocity deficit at wake planes, distributed radially [m/s]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: D_wake      !< Wake diameters at wake planes [m]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: x_plane      !< Downwind distance from rotor to each wake plane [m]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: k_mt      !< Scaling factor k_mt(r,x) for wake-added turbulence [-]
   END TYPE WD_OutputType
 ! =======================
 CONTAINS
@@ -210,6 +219,9 @@ CONTAINS
     DstInputFileTypeData%C_vShr_Exp = SrcInputFileTypeData%C_vShr_Exp
     DstInputFileTypeData%Mod_WakeDiam = SrcInputFileTypeData%Mod_WakeDiam
     DstInputFileTypeData%C_WakeDiam = SrcInputFileTypeData%C_WakeDiam
+    DstInputFileTypeData%WkAdT = SrcInputFileTypeData%WkAdT
+    DstInputFileTypeData%k_m1_WkAdT = SrcInputFileTypeData%k_m1_WkAdT
+    DstInputFileTypeData%k_m2_WkAdT = SrcInputFileTypeData%k_m2_WkAdT
  END SUBROUTINE WD_CopyInputFileType
 
  SUBROUTINE WD_DestroyInputFileType( InputFileTypeData, ErrStat, ErrMsg )
@@ -279,6 +291,9 @@ CONTAINS
       Re_BufSz   = Re_BufSz   + 1  ! C_vShr_Exp
       Int_BufSz  = Int_BufSz  + 1  ! Mod_WakeDiam
       Re_BufSz   = Re_BufSz   + 1  ! C_WakeDiam
+      Int_BufSz  = Int_BufSz  + 1  ! WkAdT
+      Re_BufSz   = Re_BufSz   + 1  ! k_m1_WkAdT
+      Re_BufSz   = Re_BufSz   + 1  ! k_m2_WkAdT
   IF ( Re_BufSz  .GT. 0 ) THEN 
      ALLOCATE( ReKiBuf(  Re_BufSz  ), STAT=ErrStat2 )
      IF (ErrStat2 /= 0) THEN 
@@ -347,6 +362,12 @@ CONTAINS
     IntKiBuf(Int_Xferred) = InData%Mod_WakeDiam
     Int_Xferred = Int_Xferred + 1
     ReKiBuf(Re_Xferred) = InData%C_WakeDiam
+    Re_Xferred = Re_Xferred + 1
+    IntKiBuf(Int_Xferred) = TRANSFER(InData%WkAdT, IntKiBuf(1))
+    Int_Xferred = Int_Xferred + 1
+    ReKiBuf(Re_Xferred) = InData%k_m1_WkAdT
+    Re_Xferred = Re_Xferred + 1
+    ReKiBuf(Re_Xferred) = InData%k_m2_WkAdT
     Re_Xferred = Re_Xferred + 1
  END SUBROUTINE WD_PackInputFileType
 
@@ -419,6 +440,12 @@ CONTAINS
     OutData%Mod_WakeDiam = IntKiBuf(Int_Xferred)
     Int_Xferred = Int_Xferred + 1
     OutData%C_WakeDiam = ReKiBuf(Re_Xferred)
+    Re_Xferred = Re_Xferred + 1
+    OutData%WkAdT = TRANSFER(IntKiBuf(Int_Xferred), OutData%WkAdT)
+    Int_Xferred = Int_Xferred + 1
+    OutData%k_m1_WkAdT = ReKiBuf(Re_Xferred)
+    Re_Xferred = Re_Xferred + 1
+    OutData%k_m2_WkAdT = ReKiBuf(Re_Xferred)
     Re_Xferred = Re_Xferred + 1
  END SUBROUTINE WD_UnPackInputFileType
 
@@ -1246,6 +1273,20 @@ IF (ALLOCATED(SrcDiscStateData%YawErr_filt)) THEN
   END IF
     DstDiscStateData%YawErr_filt = SrcDiscStateData%YawErr_filt
 ENDIF
+IF (ALLOCATED(SrcDiscStateData%k_mt)) THEN
+  i1_l = LBOUND(SrcDiscStateData%k_mt,1)
+  i1_u = UBOUND(SrcDiscStateData%k_mt,1)
+  i2_l = LBOUND(SrcDiscStateData%k_mt,2)
+  i2_u = UBOUND(SrcDiscStateData%k_mt,2)
+  IF (.NOT. ALLOCATED(DstDiscStateData%k_mt)) THEN 
+    ALLOCATE(DstDiscStateData%k_mt(i1_l:i1_u,i2_l:i2_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+      CALL SetErrStat(ErrID_Fatal, 'Error allocating DstDiscStateData%k_mt.', ErrStat, ErrMsg,RoutineName)
+      RETURN
+    END IF
+  END IF
+    DstDiscStateData%k_mt = SrcDiscStateData%k_mt
+ENDIF
  END SUBROUTINE WD_CopyDiscState
 
  SUBROUTINE WD_DestroyDiscState( DiscStateData, ErrStat, ErrMsg )
@@ -1289,6 +1330,9 @@ IF (ALLOCATED(DiscStateData%Ct_azavg_filt)) THEN
 ENDIF
 IF (ALLOCATED(DiscStateData%YawErr_filt)) THEN
   DEALLOCATE(DiscStateData%YawErr_filt)
+ENDIF
+IF (ALLOCATED(DiscStateData%k_mt)) THEN
+  DEALLOCATE(DiscStateData%k_mt)
 ENDIF
  END SUBROUTINE WD_DestroyDiscState
 
@@ -1382,6 +1426,11 @@ ENDIF
   IF ( ALLOCATED(InData%YawErr_filt) ) THEN
     Int_BufSz   = Int_BufSz   + 2*1  ! YawErr_filt upper/lower bounds for each dimension
       Re_BufSz   = Re_BufSz   + SIZE(InData%YawErr_filt)  ! YawErr_filt
+  END IF
+  Int_BufSz   = Int_BufSz   + 1     ! k_mt allocated yes/no
+  IF ( ALLOCATED(InData%k_mt) ) THEN
+    Int_BufSz   = Int_BufSz   + 2*2  ! k_mt upper/lower bounds for each dimension
+      Re_BufSz   = Re_BufSz   + SIZE(InData%k_mt)  ! k_mt
   END IF
   IF ( Re_BufSz  .GT. 0 ) THEN 
      ALLOCATE( ReKiBuf(  Re_BufSz  ), STAT=ErrStat2 )
@@ -1600,6 +1649,26 @@ ENDIF
       DO i1 = LBOUND(InData%YawErr_filt,1), UBOUND(InData%YawErr_filt,1)
         ReKiBuf(Re_Xferred) = InData%YawErr_filt(i1)
         Re_Xferred = Re_Xferred + 1
+      END DO
+  END IF
+  IF ( .NOT. ALLOCATED(InData%k_mt) ) THEN
+    IntKiBuf( Int_Xferred ) = 0
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    IntKiBuf( Int_Xferred ) = 1
+    Int_Xferred = Int_Xferred + 1
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%k_mt,1)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%k_mt,1)
+    Int_Xferred = Int_Xferred + 2
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%k_mt,2)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%k_mt,2)
+    Int_Xferred = Int_Xferred + 2
+
+      DO i2 = LBOUND(InData%k_mt,2), UBOUND(InData%k_mt,2)
+        DO i1 = LBOUND(InData%k_mt,1), UBOUND(InData%k_mt,1)
+          ReKiBuf(Re_Xferred) = InData%k_mt(i1,i2)
+          Re_Xferred = Re_Xferred + 1
+        END DO
       END DO
   END IF
  END SUBROUTINE WD_PackDiscState
@@ -1855,6 +1924,29 @@ ENDIF
       DO i1 = LBOUND(OutData%YawErr_filt,1), UBOUND(OutData%YawErr_filt,1)
         OutData%YawErr_filt(i1) = ReKiBuf(Re_Xferred)
         Re_Xferred = Re_Xferred + 1
+      END DO
+  END IF
+  IF ( IntKiBuf( Int_Xferred ) == 0 ) THEN  ! k_mt not allocated
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    Int_Xferred = Int_Xferred + 1
+    i1_l = IntKiBuf( Int_Xferred    )
+    i1_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    i2_l = IntKiBuf( Int_Xferred    )
+    i2_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    IF (ALLOCATED(OutData%k_mt)) DEALLOCATE(OutData%k_mt)
+    ALLOCATE(OutData%k_mt(i1_l:i1_u,i2_l:i2_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+       CALL SetErrStat(ErrID_Fatal, 'Error allocating OutData%k_mt.', ErrStat, ErrMsg,RoutineName)
+       RETURN
+    END IF
+      DO i2 = LBOUND(OutData%k_mt,2), UBOUND(OutData%k_mt,2)
+        DO i1 = LBOUND(OutData%k_mt,1), UBOUND(OutData%k_mt,1)
+          OutData%k_mt(i1,i2) = ReKiBuf(Re_Xferred)
+          Re_Xferred = Re_Xferred + 1
+        END DO
       END DO
   END IF
  END SUBROUTINE WD_UnPackDiscState
@@ -2263,6 +2355,18 @@ IF (ALLOCATED(SrcMiscData%Vx_high)) THEN
   END IF
     DstMiscData%Vx_high = SrcMiscData%Vx_high
 ENDIF
+IF (ALLOCATED(SrcMiscData%Vx_wind_disk_Plane)) THEN
+  i1_l = LBOUND(SrcMiscData%Vx_wind_disk_Plane,1)
+  i1_u = UBOUND(SrcMiscData%Vx_wind_disk_Plane,1)
+  IF (.NOT. ALLOCATED(DstMiscData%Vx_wind_disk_Plane)) THEN 
+    ALLOCATE(DstMiscData%Vx_wind_disk_Plane(i1_l:i1_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+      CALL SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%Vx_wind_disk_Plane.', ErrStat, ErrMsg,RoutineName)
+      RETURN
+    END IF
+  END IF
+    DstMiscData%Vx_wind_disk_Plane = SrcMiscData%Vx_wind_disk_Plane
+ENDIF
  END SUBROUTINE WD_CopyMisc
 
  SUBROUTINE WD_DestroyMisc( MiscData, ErrStat, ErrMsg )
@@ -2306,6 +2410,9 @@ IF (ALLOCATED(MiscData%r_wake)) THEN
 ENDIF
 IF (ALLOCATED(MiscData%Vx_high)) THEN
   DEALLOCATE(MiscData%Vx_high)
+ENDIF
+IF (ALLOCATED(MiscData%Vx_wind_disk_Plane)) THEN
+  DEALLOCATE(MiscData%Vx_wind_disk_Plane)
 ENDIF
  END SUBROUTINE WD_DestroyMisc
 
@@ -2398,6 +2505,11 @@ ENDIF
   IF ( ALLOCATED(InData%Vx_high) ) THEN
     Int_BufSz   = Int_BufSz   + 2*1  ! Vx_high upper/lower bounds for each dimension
       Re_BufSz   = Re_BufSz   + SIZE(InData%Vx_high)  ! Vx_high
+  END IF
+  Int_BufSz   = Int_BufSz   + 1     ! Vx_wind_disk_Plane allocated yes/no
+  IF ( ALLOCATED(InData%Vx_wind_disk_Plane) ) THEN
+    Int_BufSz   = Int_BufSz   + 2*1  ! Vx_wind_disk_Plane upper/lower bounds for each dimension
+      Re_BufSz   = Re_BufSz   + SIZE(InData%Vx_wind_disk_Plane)  ! Vx_wind_disk_Plane
   END IF
   IF ( Re_BufSz  .GT. 0 ) THEN 
      ALLOCATE( ReKiBuf(  Re_BufSz  ), STAT=ErrStat2 )
@@ -2603,6 +2715,21 @@ ENDIF
 
       DO i1 = LBOUND(InData%Vx_high,1), UBOUND(InData%Vx_high,1)
         ReKiBuf(Re_Xferred) = InData%Vx_high(i1)
+        Re_Xferred = Re_Xferred + 1
+      END DO
+  END IF
+  IF ( .NOT. ALLOCATED(InData%Vx_wind_disk_Plane) ) THEN
+    IntKiBuf( Int_Xferred ) = 0
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    IntKiBuf( Int_Xferred ) = 1
+    Int_Xferred = Int_Xferred + 1
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%Vx_wind_disk_Plane,1)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%Vx_wind_disk_Plane,1)
+    Int_Xferred = Int_Xferred + 2
+
+      DO i1 = LBOUND(InData%Vx_wind_disk_Plane,1), UBOUND(InData%Vx_wind_disk_Plane,1)
+        ReKiBuf(Re_Xferred) = InData%Vx_wind_disk_Plane(i1)
         Re_Xferred = Re_Xferred + 1
       END DO
   END IF
@@ -2849,6 +2976,24 @@ ENDIF
         Re_Xferred = Re_Xferred + 1
       END DO
   END IF
+  IF ( IntKiBuf( Int_Xferred ) == 0 ) THEN  ! Vx_wind_disk_Plane not allocated
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    Int_Xferred = Int_Xferred + 1
+    i1_l = IntKiBuf( Int_Xferred    )
+    i1_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    IF (ALLOCATED(OutData%Vx_wind_disk_Plane)) DEALLOCATE(OutData%Vx_wind_disk_Plane)
+    ALLOCATE(OutData%Vx_wind_disk_Plane(i1_l:i1_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+       CALL SetErrStat(ErrID_Fatal, 'Error allocating OutData%Vx_wind_disk_Plane.', ErrStat, ErrMsg,RoutineName)
+       RETURN
+    END IF
+      DO i1 = LBOUND(OutData%Vx_wind_disk_Plane,1), UBOUND(OutData%Vx_wind_disk_Plane,1)
+        OutData%Vx_wind_disk_Plane(i1) = ReKiBuf(Re_Xferred)
+        Re_Xferred = Re_Xferred + 1
+      END DO
+  END IF
  END SUBROUTINE WD_UnPackMisc
 
  SUBROUTINE WD_CopyParam( SrcParamData, DstParamData, CtrlCode, ErrStat, ErrMsg )
@@ -2901,6 +3046,9 @@ ENDIF
     DstParamData%k_vShr = SrcParamData%k_vShr
     DstParamData%Mod_WakeDiam = SrcParamData%Mod_WakeDiam
     DstParamData%C_WakeDiam = SrcParamData%C_WakeDiam
+    DstParamData%WkAdT = SrcParamData%WkAdT
+    DstParamData%k_m1_WkAdT = SrcParamData%k_m1_WkAdT
+    DstParamData%k_m2_WkAdT = SrcParamData%k_m2_WkAdT
  END SUBROUTINE WD_CopyParam
 
  SUBROUTINE WD_DestroyParam( ParamData, ErrStat, ErrMsg )
@@ -2980,6 +3128,9 @@ ENDIF
       Re_BufSz   = Re_BufSz   + 1  ! k_vShr
       Int_BufSz  = Int_BufSz  + 1  ! Mod_WakeDiam
       Re_BufSz   = Re_BufSz   + 1  ! C_WakeDiam
+      Int_BufSz  = Int_BufSz  + 1  ! WkAdT
+      Re_BufSz   = Re_BufSz   + 1  ! k_m1_WkAdT
+      Re_BufSz   = Re_BufSz   + 1  ! k_m2_WkAdT
   IF ( Re_BufSz  .GT. 0 ) THEN 
      ALLOCATE( ReKiBuf(  Re_BufSz  ), STAT=ErrStat2 )
      IF (ErrStat2 /= 0) THEN 
@@ -3067,6 +3218,12 @@ ENDIF
     IntKiBuf(Int_Xferred) = InData%Mod_WakeDiam
     Int_Xferred = Int_Xferred + 1
     ReKiBuf(Re_Xferred) = InData%C_WakeDiam
+    Re_Xferred = Re_Xferred + 1
+    IntKiBuf(Int_Xferred) = TRANSFER(InData%WkAdT, IntKiBuf(1))
+    Int_Xferred = Int_Xferred + 1
+    ReKiBuf(Re_Xferred) = InData%k_m1_WkAdT
+    Re_Xferred = Re_Xferred + 1
+    ReKiBuf(Re_Xferred) = InData%k_m2_WkAdT
     Re_Xferred = Re_Xferred + 1
  END SUBROUTINE WD_PackParam
 
@@ -3160,6 +3317,12 @@ ENDIF
     OutData%Mod_WakeDiam = IntKiBuf(Int_Xferred)
     Int_Xferred = Int_Xferred + 1
     OutData%C_WakeDiam = ReKiBuf(Re_Xferred)
+    Re_Xferred = Re_Xferred + 1
+    OutData%WkAdT = TRANSFER(IntKiBuf(Int_Xferred), OutData%WkAdT)
+    Int_Xferred = Int_Xferred + 1
+    OutData%k_m1_WkAdT = ReKiBuf(Re_Xferred)
+    Re_Xferred = Re_Xferred + 1
+    OutData%k_m2_WkAdT = ReKiBuf(Re_Xferred)
     Re_Xferred = Re_Xferred + 1
  END SUBROUTINE WD_UnPackParam
 
@@ -3554,6 +3717,20 @@ IF (ALLOCATED(SrcOutputData%x_plane)) THEN
   END IF
     DstOutputData%x_plane = SrcOutputData%x_plane
 ENDIF
+IF (ALLOCATED(SrcOutputData%k_mt)) THEN
+  i1_l = LBOUND(SrcOutputData%k_mt,1)
+  i1_u = UBOUND(SrcOutputData%k_mt,1)
+  i2_l = LBOUND(SrcOutputData%k_mt,2)
+  i2_u = UBOUND(SrcOutputData%k_mt,2)
+  IF (.NOT. ALLOCATED(DstOutputData%k_mt)) THEN 
+    ALLOCATE(DstOutputData%k_mt(i1_l:i1_u,i2_l:i2_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+      CALL SetErrStat(ErrID_Fatal, 'Error allocating DstOutputData%k_mt.', ErrStat, ErrMsg,RoutineName)
+      RETURN
+    END IF
+  END IF
+    DstOutputData%k_mt = SrcOutputData%k_mt
+ENDIF
  END SUBROUTINE WD_CopyOutput
 
  SUBROUTINE WD_DestroyOutput( OutputData, ErrStat, ErrMsg )
@@ -3582,6 +3759,9 @@ IF (ALLOCATED(OutputData%D_wake)) THEN
 ENDIF
 IF (ALLOCATED(OutputData%x_plane)) THEN
   DEALLOCATE(OutputData%x_plane)
+ENDIF
+IF (ALLOCATED(OutputData%k_mt)) THEN
+  DEALLOCATE(OutputData%k_mt)
 ENDIF
  END SUBROUTINE WD_DestroyOutput
 
@@ -3649,6 +3829,11 @@ ENDIF
   IF ( ALLOCATED(InData%x_plane) ) THEN
     Int_BufSz   = Int_BufSz   + 2*1  ! x_plane upper/lower bounds for each dimension
       Re_BufSz   = Re_BufSz   + SIZE(InData%x_plane)  ! x_plane
+  END IF
+  Int_BufSz   = Int_BufSz   + 1     ! k_mt allocated yes/no
+  IF ( ALLOCATED(InData%k_mt) ) THEN
+    Int_BufSz   = Int_BufSz   + 2*2  ! k_mt upper/lower bounds for each dimension
+      Re_BufSz   = Re_BufSz   + SIZE(InData%k_mt)  ! k_mt
   END IF
   IF ( Re_BufSz  .GT. 0 ) THEN 
      ALLOCATE( ReKiBuf(  Re_BufSz  ), STAT=ErrStat2 )
@@ -3785,6 +3970,26 @@ ENDIF
       DO i1 = LBOUND(InData%x_plane,1), UBOUND(InData%x_plane,1)
         ReKiBuf(Re_Xferred) = InData%x_plane(i1)
         Re_Xferred = Re_Xferred + 1
+      END DO
+  END IF
+  IF ( .NOT. ALLOCATED(InData%k_mt) ) THEN
+    IntKiBuf( Int_Xferred ) = 0
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    IntKiBuf( Int_Xferred ) = 1
+    Int_Xferred = Int_Xferred + 1
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%k_mt,1)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%k_mt,1)
+    Int_Xferred = Int_Xferred + 2
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%k_mt,2)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%k_mt,2)
+    Int_Xferred = Int_Xferred + 2
+
+      DO i2 = LBOUND(InData%k_mt,2), UBOUND(InData%k_mt,2)
+        DO i1 = LBOUND(InData%k_mt,1), UBOUND(InData%k_mt,1)
+          ReKiBuf(Re_Xferred) = InData%k_mt(i1,i2)
+          Re_Xferred = Re_Xferred + 1
+        END DO
       END DO
   END IF
  END SUBROUTINE WD_PackOutput
@@ -3943,6 +4148,29 @@ ENDIF
       DO i1 = LBOUND(OutData%x_plane,1), UBOUND(OutData%x_plane,1)
         OutData%x_plane(i1) = ReKiBuf(Re_Xferred)
         Re_Xferred = Re_Xferred + 1
+      END DO
+  END IF
+  IF ( IntKiBuf( Int_Xferred ) == 0 ) THEN  ! k_mt not allocated
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    Int_Xferred = Int_Xferred + 1
+    i1_l = IntKiBuf( Int_Xferred    )
+    i1_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    i2_l = IntKiBuf( Int_Xferred    )
+    i2_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    IF (ALLOCATED(OutData%k_mt)) DEALLOCATE(OutData%k_mt)
+    ALLOCATE(OutData%k_mt(i1_l:i1_u,i2_l:i2_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+       CALL SetErrStat(ErrID_Fatal, 'Error allocating OutData%k_mt.', ErrStat, ErrMsg,RoutineName)
+       RETURN
+    END IF
+      DO i2 = LBOUND(OutData%k_mt,2), UBOUND(OutData%k_mt,2)
+        DO i1 = LBOUND(OutData%k_mt,1), UBOUND(OutData%k_mt,1)
+          OutData%k_mt(i1,i2) = ReKiBuf(Re_Xferred)
+          Re_Xferred = Re_Xferred + 1
+        END DO
       END DO
   END IF
  END SUBROUTINE WD_UnPackOutput

@@ -210,6 +210,11 @@ subroutine LowResGridCalcOutput(n, u, p, y, m, errStat, errMsg)
    integer(IntKi)      :: i,np1,errStat2
    character(*), parameter   :: RoutineName = 'LowResGridCalcOutput'
    logical             :: within
+   ! Wake-added turbulence variables
+   real(ReKi)          :: V_wkadT_tmp(3), V_wkadT_trans(3)
+   real(ReKi)          :: p_WkadT_tmp(3)
+   real(ReKi)          :: tmp_k_mt, tmp_k_mt_interp
+   real(ReKi)          :: gamma_xhat_plane									  
 
    errStat = ErrID_None
    errMsg  = ""
@@ -257,7 +262,10 @@ subroutine LowResGridCalcOutput(n, u, p, y, m, errStat, errMsg)
             nXYZ_low = i + 1
             n_wake = 0
             xhatBar_plane = 0.0_ReKi
-
+			tmp_k_mt = 0.0_ReKi
+			V_wkadT_trans = 0.0_ReKi
+			V_wkadT_tmp = 0.0_ReKi
+			   
             do nt = 1,p%NumTurbines
 
                ! H Long: replace intrinsic dot_product with explicit do product can save as much as 10% of total calculation time!
@@ -326,6 +334,38 @@ subroutine LowResGridCalcOutput(n, u, p, y, m, errStat, errMsg)
                         tmp_xhat_plane(:,n_wake) = delta*u%xhat_plane(:,np1,nt) + deltad*u%xhat_plane(:,np,nt)
                         tmp_xhat_plane(:,n_wake) = tmp_xhat_plane(:,n_wake) / TwoNorm(tmp_xhat_plane(:,n_wake))
                         xhatBar_plane = xhatBar_plane + abs(tmp_Vx_wake(n_wake))*tmp_xhat_plane(:,n_wake)
+
+						      ! Interpolate in wake-added turbulence grid
+						      if ( p%WkAdT ) then
+						         ! Therefore we transform the low-res-grid coordinate into the wake added turbulence (WAT) grid coordinates.
+						         ! Hereby, we neglect the tilt angle of the wake-plane which is considered to be small
+						         ! The x-coordinate in the WAT-Grid (p_WkadT_tmp(1)) is taken from the WD-module (u%x_plane)
+						         p_WkadT_tmp(1) = delta*u%x_plane(np1,nt) + deltad*u%x_plane(np,nt)
+						         ! Calculate the angle gamma of the wake-plane which gives the rotation around the z-axis
+						         if ( EqualRealNos(tmp_xhat_plane(1,n_wake), 0.0_ReKi) ) then
+						            gamma_xhat_plane = tmp_xhat_plane(2,n_wake)/abs(tmp_xhat_plane(2,n_wake)) * pi/2
+						         else
+						            gamma_xhat_plane = atan(tmp_xhat_plane(2,n_wake)/tmp_xhat_plane(1,n_wake))
+                           end if
+						         
+						         ! Interpolate scaling factor k_mt for WAT in axisymmetric WD-grid
+                           tmp_k_mt_interp = delta*InterpBin( r_tmp_plane, p%r, u%k_mt(:,np1,nt), ILo, p%NumRadii ) + deltad*InterpBin( r_tmp_plane, p%r, u%k_mt(:,np,nt), ILo, p%NumRadii ) !( XVal, XAry, YAry, ILo, AryLen )
+						         ! Based on tmp_k_mt we decide, which wake has the strongest effect in terms of wake-added turbulence
+						         ! We also check if the demanded position in x-direction is greater than the origin position of the wake added turbulence grid.
+						         if ( (tmp_k_mt_interp > tmp_k_mt) .AND. (p_WkadT_tmp(1) > p%P0_WkAdT(1)) ) THEN
+                                    ! Continue transformation of low-res coordinate into WAT-grid
+						            p_WkadT_tmp(2) = -sin(gamma_xhat_plane)*(p%Grid_Low(1,nXYZ_low) - p_tmp_plane(1)) + &
+						                              cos(gamma_xhat_plane)*(p%Grid_Low(2,nXYZ_low) - p_tmp_plane(2))
+						            p_WkadT_tmp(3) = (p%Grid_Low(3,nXYZ_low) - p_tmp_plane(3)) + p%Grid_WkAdT_zCenter
+                           
+						            ! Interpolate the WAT-velocity in the WAT-grid
+						            ! In the low resolution domain, we only use the index=0 of the low resoultion timestep m%VwkadT(:,:,:,:,0)			
+						            V_wkadT_trans = INTERP3D(p_WkadT_tmp, p%P0_WkAdT, p%dXYZ_WkAdT, m%VwkAdT(1:3,:,:,:,0), within, p%nX_WkAdT, p%nY_WkAdT, p%nZ_WkAdT)
+						            tmp_k_mt = tmp_k_mt_interp
+						            ! Multiply scaling factor with WAT velocity
+						            V_wkadT_trans = tmp_k_mt * V_wkadT_trans
+						         end if
+                        end if
                      end if  ! if the point is within radial finite-difference grid
                 end if
             end do  ! do np = 0, p%NumPlanes-2
@@ -350,6 +390,14 @@ subroutine LowResGridCalcOutput(n, u, p, y, m, errStat, errMsg)
                   ! [I - XX']V = V - (V dot X)X
            Vr_wake_tmp = Vr_wake_tmp - dot_product(Vr_wake_tmp,xhatBar_plane)*xhatBar_plane
            m%Vdist_low(:,nx_low,ny_low,nz_low) = m%Vdist_low(:,nx_low,ny_low,nz_low) + real(Vr_wake_tmp - xhatBar_plane*sqrt(Vx_wake_tmp),SiKi)
+		     
+           ! Add Wake added turbulence velocity to disturbed velocity
+		     ! Transform wake added turbulence velocity from wake-added turbulence grid into low-res grid
+		     ! Only x,y-coordinates are transformed. Z-coordinate is directly taken
+		     V_wkadT_tmp(1) =  cos(-gamma_xhat_plane)*V_wkadT_trans(1) + sin(-gamma_xhat_plane)*V_wkadT_trans(2)
+		     V_wkadT_tmp(2) = -sin(-gamma_xhat_plane)*V_wkadT_trans(1) + cos(-gamma_xhat_plane)*V_wkadT_trans(2)
+		     V_wkadT_tmp(3) =  V_wkadT_trans(3)
+		     m%Vdist_low(:,nx_low,ny_low,nz_low) = m%Vdist_low(:,nx_low,ny_low,nz_low) + V_wkadT_tmp(:)												 
         end if  ! (n_wake > 0)
    end do
    !      end do ! do nx_low=0, p%nX_low-1
@@ -539,6 +587,15 @@ subroutine HighResGridCalcOutput(n, u, p, y, m, errStat, errMsg)
    integer(IntKi)      :: ILo
    integer(IntKi)      :: maxPln
    integer(IntKi)      :: n_high_low
+   integer(IntKi)      :: errStat2
+   logical             :: within
+   ! Wake-Added Turbulence variables
+   real(SiKi), ALLOCATABLE :: V_wkadT_trans(:,:)
+   real(ReKi)          :: V_wkadT_tmp(3)
+   real(ReKi)          :: p_WkadT_tmp(3)   
+   real(ReKi)          :: tmp_k_mt
+   real(ReKi)          :: tmp_k_mt_interp
+   real(ReKi)          :: gamma_xhat_plane   
    character(*), parameter   :: RoutineName = 'HighResGridCalcOutput'
    errStat = ErrID_None
    errMsg  = ""
@@ -552,7 +609,9 @@ subroutine HighResGridCalcOutput(n, u, p, y, m, errStat, errMsg)
    else
       n_high_low = p%n_high_low
    end if
-
+   
+   allocate ( V_wkadT_trans    ( 1:3, 0:n_high_low ), STAT=errStat2 )
+       if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for V_wkadT_trans.', errStat, errMsg, RoutineName )																																   
 
       ! Loop over the entire grid of low resolution ambient wind data to compute:
       !    1) the disturbed flow at each point and 2) the averaged disturbed velocity of each wake plane
@@ -571,6 +630,9 @@ subroutine HighResGridCalcOutput(n, u, p, y, m, errStat, errMsg)
                nXYZ_high = nXYZ_high + 1
                n_wake = 0
                xhatBar_plane = 0.0_ReKi
+			   tmp_k_mt = 0.0_ReKi
+			   V_wkadT_trans = 0.0_ReKi
+			   V_wkadT_tmp = 0.0_ReKi	
 
                do nt2 = 1,p%NumTurbines
                   if (nt /= nt2) then
@@ -628,6 +690,38 @@ subroutine HighResGridCalcOutput(n, u, p, y, m, errStat, errMsg)
                               m%xhat_plane(:,n_wake) = m%xhat_plane(:,n_wake) / TwoNorm(m%xhat_plane(:,n_wake))
                               xhatBar_plane = xhatBar_plane + abs(m%Vx_wake(n_wake))*m%xhat_plane(:,n_wake)
 
+						            ! Interpolate in wake-added turbulence grid
+						            if ( p%WkAdT ) then
+						               ! Therefore we transform the high-res-grid coordinate into the wake added turbulence (WAT) grid coordinates.
+						               ! Hereby, we neglect the tilt angle of the wake-plane which is considered to be small
+						               ! The x-coordinate in the WAT-Grid (p_WkadT_tmp(1)) is taken from the WD-module (u%x_plane)
+						               p_WkadT_tmp(1) = delta*u%x_plane(np+1,nt2) + deltad*u%x_plane(np,nt2)
+						               ! Calculate the angle gamma of the wake-plane which gives the rotation around the z-axis
+						               if ( EqualRealNos(m%xhat_plane(1,n_wake), 0.0_ReKi) ) then
+						                  gamma_xhat_plane = m%xhat_plane(2,n_wake)/abs(m%xhat_plane(2,n_wake)) * pi/2
+						               else
+						                  gamma_xhat_plane = atan(m%xhat_plane(2,n_wake)/m%xhat_plane(1,n_wake))
+                                 end if
+						               
+						               ! Interpolate scaling factor k_mt for WAT in axisymmetric WD-grid
+                                 tmp_k_mt_interp = delta*InterpBin( r_tmp_plane, p%r, u%k_mt(:,np+1,nt2), ILo, p%NumRadii ) + deltad*InterpBin( r_tmp_plane, p%r, u%k_mt(:,np,nt2), ILo, p%NumRadii ) !( XVal, XAry, YAry, ILo, AryLen )
+						               ! Based on tmp_k_mt we decide, which wake has the strongest effect in terms of wake-added turbulence
+						               ! We also check if the demanded position in x-direction is greater than the origin position of the wake added turbulence grid.
+						               if ( (tmp_k_mt_interp > tmp_k_mt) .AND. (p_WkadT_tmp(1) > p%P0_WkAdT(1)) ) THEN
+						                  tmp_k_mt = tmp_k_mt_interp
+                                          ! Continue transformation of low-res coordinate into WAT-grid
+						                  p_WkadT_tmp(2) = -sin(gamma_xhat_plane)*(p%Grid_high(1,nXYZ_high,nt) - p_tmp_plane(1)) + &
+						                                    cos(gamma_xhat_plane)*(p%Grid_high(2,nXYZ_high,nt) - p_tmp_plane(2))
+						                  p_WkadT_tmp(3) = (p%Grid_high(3,nXYZ_high,nt) - p_tmp_plane(3)) + p%Grid_WkAdT_zCenter
+							              
+                                    do n_hl=0, n_high_low
+						                     ! Interpolate the WAT-velocity in the WAT-grid
+						                     V_wkadT_trans(:,n_hl) = INTERP3D(p_WkadT_tmp, p%P0_WkAdT, p%dXYZ_WkAdT, m%VwkAdT(1:3,:,:,:,n_hl), within, p%nX_WkAdT, p%nY_WkAdT, p%nZ_WkAdT)
+						                     ! Multiply scaling factor with WAT velocity
+						                     V_wkadT_trans(:,n_hl) = tmp_k_mt * V_wkadT_trans(:,n_hl)
+                                    end do						   
+						               end if
+                              end if
                            end if  ! if the point is within radial finite-difference grid
 
                         end if  ! if the point is within the endcaps of the wake volume
@@ -655,6 +749,14 @@ subroutine HighResGridCalcOutput(n, u, p, y, m, errStat, errMsg)
                   Vr_wake_tmp = Vr_wake_tmp - dot_product(Vr_wake_tmp,xhatBar_plane)*xhatBar_plane
                   do n_hl=0, n_high_low
                      y%Vdist_high(nt)%data(:,nx_high,ny_high,nz_high,n_hl) = y%Vdist_high(nt)%data(:,nx_high,ny_high,nz_high,n_hl) + real(Vr_wake_tmp - xhatBar_plane*sqrt(Vx_wake_tmp),SiKi)
+                     
+                     ! Add Wake added turbulence to disturbed velocity
+		               ! Transform wake added turbulence velocity from wake-added turbulence grid into low-res grid
+		               ! Only x,y-coordinates are transformed. Z-coordinate is directly taken
+		               V_wkadT_tmp(1) =  cos(-gamma_xhat_plane)*V_wkadT_trans(1,n_hl) + sin(-gamma_xhat_plane)*V_wkadT_trans(2,n_hl)
+		               V_wkadT_tmp(2) = -sin(-gamma_xhat_plane)*V_wkadT_trans(1,n_hl) + cos(-gamma_xhat_plane)*V_wkadT_trans(2,n_hl)
+		               V_wkadT_tmp(3) =  V_wkadT_trans(3,n_hl)					 
+		               y%Vdist_high(nt)%data(:,nx_high,ny_high,nz_high,n_hl) = y%Vdist_high(nt)%data(:,nx_high,ny_high,nz_high,n_hl) + V_wkadT_tmp(:)
                   end do
 
                end if  ! (n_wake > 0)
@@ -664,6 +766,7 @@ subroutine HighResGridCalcOutput(n, u, p, y, m, errStat, errMsg)
       end do       ! nz_high=0, p%nZ_high-1
    end do          ! nt = 1,p%NumTurbines
 
+   if (allocated(V_wkadT_trans)) deallocate(V_wkadT_trans)														  
 
 end subroutine HighResGridCalcOutput
 
@@ -694,7 +797,7 @@ subroutine AWAE_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitO
 
       ! Local variables
    character(1024)                               :: rootDir, baseName, OutFileVTKDir ! Simulation root dir, basename for outputs
-   integer(IntKi)                                :: i,j,nt        ! loop counter
+   integer(IntKi)                                :: i,j,nt,k,c,ix,iz,iy        ! loop counter
    integer(IntKi)                                :: maxN_wake
    real(ReKi)                                    :: gridLoc       ! Location of requested output slice in grid coordinates [0,sz-1]
    integer(IntKi)                                :: errStat2      ! temporary error status of the operation
@@ -702,6 +805,17 @@ subroutine AWAE_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitO
    character(*), parameter                       :: RoutineName = 'AWAE_Init'
    type(InflowWind_InitInputType)                :: IfW_InitInp
    type(InflowWind_InitOutputType)               :: IfW_InitOut
+   ! Wake-Added Turbulence variables
+   REAL(DbKi)                                    :: v(3)              ! instanteanous wind speed at target position   
+   REAL(DbKi)                                    :: vMean(3)          ! average wind speeds over time at target position
+   REAL(DbKi)                                    :: vSum(3)           ! sum over time of wind speeds at target position
+   REAL(DbKi)                                    :: vSum2(3)          ! sum of wind speeds squared
+   REAL(ReKi)                                    :: ActualSigmaMean(3)    ! Mean value of standard deviation across entire grid      
+   REAL(ReKi), ALLOCATABLE                       :: ActualSigma(:,:,:)    ! computed standard deviation in each WkAdT-grid point
+   character(100)                                :: WkAdTstd_String       ! temporary error message
+   INTEGER(IntKi)                                :: nGridTime, iGridTime 
+   REAL(DbKi)                                    :: checkTime      
+   REAL(SiKi), ALLOCATABLE                       :: VwkAdTtemp(:,:,:,:)    
       ! Initialize variables for this routine
 
    errStat = ErrID_None
@@ -716,10 +830,6 @@ subroutine AWAE_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitO
    call DispNVD( AWAE_Ver )
 
    p%OutFileRoot  = TRIM(InitInp%OutFileRoot)
-
-
-
-
       ! Validate the initialization inputs
    call ValidateInitInputData( InitInp%InputFileData, ErrStat2, ErrMsg2 )
       call SetErrStat( ErrStat2, ErrMsg2, errStat, errMsg, RoutineName )
@@ -749,6 +859,9 @@ subroutine AWAE_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitO
    p%WrDisSkp1        = nint(InitInp%InputFileData%WrDisDT / p%dt_low)
    p%Mod_Meander      = InitInp%InputFileData%Mod_Meander
    p%C_Meander        = InitInp%InputFileData%C_Meander
+   ! Wake Added Turbulence Parameters
+   p%WkAdT            = InitInp%InputFileData%WkAdT  
+   p%WkAdTinflowFile  = InitInp%InputFileData%WkAdTinflowFile								 
 
    select case ( p%Mod_Meander )
    case (MeanderMod_Uniform)
@@ -784,8 +897,10 @@ subroutine AWAE_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitO
 
    ! --- Vtk Outputs
    call GetPath( p%OutFileRoot, rootDir, baseName ) 
-   OutFileVTKDir    = trim(rootDir) // 'vtk_ff'  ! Directory for VTK outputs
-   p%OutFileVTKRoot = trim(rootDir) // 'vtk_ff' // PathSep // trim(baseName) ! Basename for VTK files
+!   OutFileVTKDir    = trim(rootDir) // 'vtk_ff'  ! Directory for VTK outputs
+   OutFileVTKDir    = trim(rootDir)  ! MK: Remove subDir to make it compatible with condor
+!   p%OutFileVTKRoot = trim(rootDir) // 'vtk_ff' // PathSep // trim(baseName) ! Basename for VTK files
+   p%OutFileVTKRoot = trim(rootDir) // PathSep // trim(baseName) ! MK: Remove subDir to make it compatible with condor
    p%VTK_tWidth = CEILING( log10( real(p%NumDT, ReKi)/real(p%WrDisSkp1, ReKi) ) + 1) ! Length for time stamp
    if (p%WrDisWind .or. p%NOutDisWindXY>0 .or. p%NOutDisWindYZ>0 .or. p%NOutDisWindXZ>0) then
       call MKDIR(OutFileVTKDir) ! creating output directory
@@ -1004,7 +1119,9 @@ subroutine AWAE_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitO
       if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for u%Vr_wake.', errStat, errMsg, RoutineName )
    allocate ( u%D_wake    (0:p%NumPlanes-1,1:p%NumTurbines), STAT=ErrStat2 )
       if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for u%D_wake.', errStat, errMsg, RoutineName )
-   if (errStat /= ErrID_None) return
+   allocate ( u%k_mt      (0:p%NumRadii-1, 0:p%NumPlanes-1, 1:p%NumTurbines), STAT=ErrStat2 )
+      if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for u%k_mt.', errStat, errMsg, RoutineName )
+  if (errStat /= ErrID_None) return
 
 
 
@@ -1111,9 +1228,177 @@ subroutine AWAE_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitO
    if (errStat /= ErrID_None) return
 
 
+   if ( p%WkAdT ) then
+      ! -------------------------------------------------------------------------------------------------------------------
+      ! Initialize wake-added Turbulence (WkAdT) field    
+      ! -------------------------------------------------------------------------------------------------------------------
+      ! Set the position inputs once for the wake-added turbulence grid´
+      ! Obtain the precursor grid information by parsing the necessary input files
+      ! This will establish certain parameters as well as all of the initialization outputs
+      ! Sets:
+      ! Parameters: X0_WkAdT, Y0_WkAdT, Z0_WkAdT, nX_WkAdT, nY_WkAdT, nZ_WkAdT, dX_WkAdT, dY_WkAdT, dZ_WkAdT
+      !             NumGrid_WkAdT, dXYZ_WkAdT, dXYZ_WkAdT, Grid_WkAdT_zCenter
+      
+      call AWAE_IO_WkAdTGridInfo(InitInp, p, errStat2, errMsg2)
+         call SetErrStat ( errStat2, errMsg2, errStat, errMsg, RoutineName )
+      if (errStat2 >= AbortErrLev) then
+            return
+      end if   
+      
+      ! ........................
+      ! initialize InflowWind for WkAdT
+      ! ........................
+      ! Using InflowWind, so initialize that module now
+      IfW_InitInp%Linearize             = .false.
+      IfW_InitInp%RootName              = TRIM(p%OutFileRoot)//'_WkAdT.IfW'
+      IfW_InitInp%UseInputFile          = .TRUE.
+      IfW_InitInp%InputFileName         = p%WkAdTinflowFile
+      IfW_InitInp%lidar%Tmax            = 0.0_ReKi
+      IfW_InitInp%lidar%HubPosition     = 0.0_ReKi
+      IfW_InitInp%lidar%SensorType      = SensorType_None
+      IfW_InitInp%Use4Dext              = .false.
+      IfW_InitInp%FixedWindFileRootName = .false.
+      IfW_InitInp%NumWindPoints         = p%NumGrid_WkAdT       ! set the initial number of grid points to the number of wake planes
+      IfW_InitInp%TurbineID             = 0
+      
+	   	 
+      ALLOCATE(p%IfWwkAdT(0:0),STAT=ErrStat2)
+      if (ErrStat2 /= 0) then
+         CALL SetErrStat( ErrID_Fatal, 'Could not allocate memory for InflowWind-WkAdT parameter data', ErrStat, ErrMsg, RoutineName )
+         return
+      end if
+      ALLOCATE(x%IfWwkAdT(0:0),STAT=ErrStat2)
+      if (ErrStat2 /= 0) then
+         CALL SetErrStat( ErrID_Fatal, 'Could not allocate memory for InflowWind-WkAdT continuous states data', ErrStat, ErrMsg, RoutineName )
+         return
+      end if
+      ALLOCATE(xd%IfWwkAdT(0:0),STAT=ErrStat2)
+      if (ErrStat2 /= 0) then
+         CALL SetErrStat( ErrID_Fatal, 'Could not allocate memory for InflowWind-WkAdT discrete states data', ErrStat, ErrMsg, RoutineName )
+         return
+      end if
+      ALLOCATE(z%IfWwkAdT(0:0),STAT=ErrStat2)
+      if (ErrStat2 /= 0) then
+         CALL SetErrStat( ErrID_Fatal, 'Could not allocate memory for InflowWind-WkAdT constraint states data', ErrStat, ErrMsg, RoutineName )
+         return
+      end if
+      ALLOCATE(OtherState%IfWwkAdT(0:0),STAT=ErrStat2)
+      if (ErrStat2 /= 0) then
+         CALL SetErrStat( ErrID_Fatal, 'Could not allocate memory for InflowWind-WkAdT other states data', ErrStat, ErrMsg, RoutineName )
+         return
+      end if
+      ALLOCATE(m%IfWwkAdT(0:0),STAT=ErrStat2)
+      if (ErrStat2 /= 0) then
+         CALL SetErrStat( ErrID_Fatal, 'Could not allocate memory for InflowWind-WkAdT miscvar data', ErrStat, ErrMsg, RoutineName )
+         return
+      end if
+      
+      
+      call InflowWind_Init( IfW_InitInp, m%u_IfW_WkAdT, p%IfWwkAdT(0), x%IfWwkAdT(0), xd%IfWwkAdT(0), z%IfWwkAdT(0), OtherState%IfWwkAdT(0), m%y_IfW_WkAdT, m%IfWwkAdT(0), Interval, IfW_InitOut, ErrStat2, ErrMsg2 )
+         call SetErrStat ( errStat2, errMsg2, errStat, errMsg, RoutineName )
+      if (errStat2 >= AbortErrLev) then
+         return
+      end if
+      
+      m%u_IfW_WkAdT%PositionXYZ = p%Grid_WkAdT
+      
+      allocate ( u%x_plane   (0:p%NumPlanes-1, 1:p%NumTurbines), STAT=ErrStat2 )
+         if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for u%x_plane.', errStat, errMsg, RoutineName ) 
+      allocate ( m%VwkAdT   ( 1:3, 0:p%nX_WkAdT-1 , 0:p%nY_WkAdT-1 , 0:p%nZ_WkAdT-1, 0:p%n_high_low ), STAT=errStat2 )
+         if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%VuWkAdT.', errStat, errMsg, RoutineName )              
+      ! Initialize wake added turbulence field to zero
+      m%VwkAdT     = 0.0_SiKi
+      u%x_plane    = 0.0_ReKi
+      
+  !    We now check if the turbulence field was inizialized correctly. For this we need the full length of the WkAdT-box
+  !    Therefore we calculate the standard deviation in x-direction in each point. 
+  !    Then we calculate the mean of all standard deviations and check if we are around 1m/s.
+  !    If not we throw an error
+      allocate ( ActualSigma(0:p%nY_WkAdT-1,0:p%nZ_WkAdT-1,1:3), STAT=ErrStat2 )
+         if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for ActualSigma.', errStat, errMsg, RoutineName )              
+      
+      nGridTime = ceiling(IfW_InitOut%WindFileInfo%TRange(2) / (p%nX_WkAdT*p%dX_WkAdT/IfW_InitOut%WindFileInfo%MWS), IntKi)
+      
+      allocate ( VwkAdTtemp(1:3, 0:nGridTime*p%nX_WkAdT-1, 0:p%ny_WkAdT-1, 0:p%nz_WkAdT-1 ), STAT=ErrStat2 )
+         if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for VwkAdTtemp.', errStat, errMsg, RoutineName )              
+                 
+         
+      do iGridTime = 0,nGridTime-1
+      
+         checkTime = p%nX_WkAdT*p%dX_WkAdT/IfW_InitOut%WindFileInfo%MWS*iGridTime
+            
+         call InflowWind_CalcOutput(checkTime, m%u_IfW_WkAdT, p%IfWwkAdT(0), x%IfWwkAdT(0), xd%IfWwkAdT(0), z%IfWwkAdT(0), OtherState%IfWwkAdT(0), m%y_IfW_WkAdT, m%IfWwkAdT(0), errStat, errMsg)
+         if ( errStat >= AbortErrLev ) then
+            return
+         end if
+      
+         c = 1
+         do k = 0,p%nZ_WkAdT-1
+            do j = 0,p%nY_WkAdT-1
+               do i = (iGridTime)*p%nX_WkAdT, (iGridTime+1)*p%nX_WkAdT-1
+                  VwkAdTtemp(:,i,j,k) = m%y_IfW_WkAdT%VelocityUVW(:,c)
+                  c = c+1
+               end do
+            end do
+         end do
+      
+      end do
+      
+      DO iz = 0,p%nZ_WkAdT-1
+         DO iy = 0,p%nY_WkAdT-1
+      
+            vSum  = 0.0 
+            vSum2 = 0.0 
+      
+            DO ix = 0, (nGridTime)*p%nX_WkAdT-1
+               v = VwkAdTtemp(:,ix,iy,iz)
+      
+               vSum  = vSum  + v
+               vSum2 = vSum2 + v**2
+            ENDDO
+      
+            vMean = vSum/(nGridTime*p%nX_WkAdT)
+            ActualSigma(iy,iz,:) = SQRT( ABS( (vSum2/(nGridTime*p%nX_WkAdT)) - vMean**2 ) )
+      
+         ENDDO
+      ENDDO
+	    
+      ActualSigmaMean(1) = sum(ActualSigma(:,:,1))/(p%nY_WkAdT*p%nZ_WkAdT)
+      ActualSigmaMean(2) = sum(ActualSigma(:,:,2))/(p%nY_WkAdT*p%nZ_WkAdT)
+      ActualSigmaMean(3) = sum(ActualSigma(:,:,3))/(p%nY_WkAdT*p%nZ_WkAdT)
+         
+      ! Throw an error if calculated standard deviation is not around 1 [m/s] in all directions
+!      IF ( any(abs(ActualSigmaMean - 1) > 0.05) ) THEN
+!         write(WkAdTstd_String,'(3(ES15.4))') ActualSigmaMean(1), ActualSigmaMean(2), ActualSigmaMean(3)
+!         ErrStat2        =  ErrID_Info
+!         errMsg2         =  "The standard deviations of wake-added Turbulence components should be around 1 [m/s]." // & 
+!                            "For the directions (x,y,z) they are currently in [m/s]: " //  NEW_LINE('a') // WkAdTstd_String  //  NEW_LINE('a') // & 
+!                            "Please use a different scaling to match a STD of 1 [m/s]."
+!         call SetErrStat ( errStat2, errMsg2, errStat, errMsg, RoutineName )
+!         if (errStat2 >= AbortErrLev) then
+!            return
+!         end if      
+!      END IF
+
+       write(WkAdTstd_String,'(3(ES15.4))') ActualSigmaMean(1), ActualSigmaMean(2), ActualSigmaMean(3)
+       WRITE(*,*) "The standard deviations of wake-added Turbulence components should be around 1 [m/s]." // & 
+                  "For the directions (x,y,z) they are currently in [m/s]: " //  NEW_LINE('a') // WkAdTstd_String  //  NEW_LINE('a')
+                  
+   end if
+      
+   if (allocated(ActualSigma)) deallocate(ActualSigma)
+   if (allocated(VwkAdTtemp)) deallocate(VwkAdTtemp)
+  
+   
+   ! -------------------------------------------------------------------------------------------------------------------
+   ! End Initialization of wake-added Turbulence (WkAdT) field    
+   ! -------------------------------------------------------------------------------------------------------------------
+
+
    ! Read-in the ambient wind data for the initial calculate output
 
    call AWAE_UpdateStates( 0.0_DbKi, -1, u, p, x, xd, z, OtherState, m, errStat, errMsg )
+
 
 
 
@@ -1323,7 +1608,28 @@ subroutine AWAE_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errM
       end if
 
    end if
-
+               
+  ! Progress the wake-added turbulence field in time  
+   if ( p%WkAdT ) then
+      !m%u_IfW_WkAdT%PositionXYZ = p%Grid_WkAdT      
+      do n_hl=0, p%n_high_low
+         call InflowWind_CalcOutput(t+p%DT_low+p%DT_low/p%n_high_low*n_hl, m%u_IfW_WkAdT, p%IfWwkAdT(0), x%IfWwkAdT(0), xd%IfWwkAdT(0), z%IfWwkAdT(0), OtherState%IfWwkAdT(0), m%y_IfW_WkAdT, m%IfWwkAdT(0), errStat, errMsg)
+         if ( errStat >= AbortErrLev ) then
+            return
+         end if
+      
+         c = 1
+         do k = 0,p%nZ_WkAdT-1
+            do j = 0,p%nY_WkAdT-1
+               do i = 0,p%nX_WkAdT-1
+                  m%VwkAdT(:,i,j,k,n_hl) = m%y_IfW_WkAdT%VelocityUVW(:,c)
+                  c = c+1
+               end do
+            end do
+         end do
+      end do   
+   end if
+  
 !#ifdef _OPENMP
 !   t1 = omp_get_wtime()      
 !   write(*,*) '        AWAE_UpdateStates: Time spent reading High Res data : '//trim(num2lstr(t1-t2))//' seconds'             
@@ -1433,7 +1739,8 @@ subroutine AWAE_CalcOutput( t, u, p, x, xd, z, OtherState, y, m, errStat, errMsg
       do k = 1,p%NOutDisWindXZ
          call ExtractSlice( XZSlice, p%OutDisWindY(k), p%Y0_low, p%nY_low, p%nX_low, p%nZ_low, p%dY_low, m%Vdist_low, m%outVizXZPlane(:,:,:,1))
             ! Create the output vtk file with naming <WindFilePath>/Low/DisXZ<k>.t<n/p%WrDisSkp1>.vtk
-         FileName = trim(p%OutFileVTKRoot)//".Low.DisXZ"//trim(num2lstr(k))//"."//trim(Tstr)//".vtk"
+         FileName = trim(p%OutFileRoot)//".Low.DisXZ"//trim(num2lstr(k))//"."//trim(Tstr)//".vtk"
+         !FileName = trim(p%OutFileVTKRoot)//".Low.DisXZ"//trim(num2lstr(k))//"."//trim(Tstr)//".vtk"
          call WrVTK_SP_header( FileName, "Low resolution, disturbed wind of XZ Slice at time = "//trim(num2lstr(t))//" seconds.", Un, ErrStat2, ErrMsg2 )
             call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
             if (ErrStat >= AbortErrLev) return

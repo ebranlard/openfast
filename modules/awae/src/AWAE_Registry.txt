@@ -64,7 +64,18 @@ typedef  ^            ^                   ReKi            X0_low         -  - - 
 typedef  ^            ^                   ReKi            Y0_low         -  - -   "Y-component of the origin of the low-resolution spatial domain" m
 typedef  ^            ^                   ReKi            Z0_low         -  - -   "Z-component of the origin of the low-resolution spatial domain" m
 typedef  ^            ^                   ReKi            WT_Position  {:}{:} - - "X-Y-Z position of each wind turbine; index 1 = XYZ; index 2 = turbine number" meters
-
+# Wake-Added Turbulence variables
+typedef	 ^	          ^                   LOGICAL         WkAdT 	       -  - - "Switch for turning on and off wake-added turbulence"	-
+typedef  ^            ^                   CHARACTER(1024) WkAdTinflowFile  -  - -   "Name of file containing InflowWind module input parameters for wake added turbulence(quoted string)" -
+typedef  ^            ^                   IntKi           nX_WkAdT         -  - -   "Number  of spatial nodes in X direction for wake-added turbulence grid" -
+typedef  ^            ^                   IntKi           nY_WkAdT         -  - -   "Number  of spatial nodes in Y direction for wake-added turbulence grid" -
+typedef  ^            ^                   IntKi           nZ_WkAdT         -  - -   "Number  of spatial nodes in Z direction for wake-added turbulence grid" -
+typedef  ^            ^                   ReKi            X0_WkAdT         -  - -   "X-component of the origin of the WkAdT-resolution spatial domain" m
+typedef  ^            ^                   ReKi            Y0_WkAdT         -  - -   "Y-component of the origin of the WkAdT-resolution spatial domain" m
+typedef  ^            ^                   ReKi            Z0_WkAdT         -  - -   "Z-component of the origin of the WkAdT-resolution spatial domain" m
+typedef  ^            ^                   ReKi            dX_WkAdT         -  - -   "The spacing of the WkAdT-resolution nodes in X direction" m
+typedef  ^            ^                   ReKi            dY_WkAdT         -  - -   "The spacing of the WkAdT-resolution nodes in Y direction" m
+typedef  ^            ^                   ReKi            dZ_WkAdT         -  - -   "The spacing of the WkAdT-resolution nodes in Z direction" m																																			
 # ..... Initialization data .......................................................................................................
 # Define inputs that the initialization routine may need here:
 #   e.g., the name of the input file, the file root name, etc.
@@ -96,19 +107,33 @@ typedef   ^ InitOutputType IntKi              nZ_low           -  - -   "Number 
 typedef   ^ InitOutputType ReKi               X0_low           -  - -   "X-component of the origin of the low-resolution spatial domain" m
 typedef   ^ InitOutputType ReKi               Y0_low           -  - -   "Y-component of the origin of the low-resolution spatial domain" m
 typedef   ^ InitOutputType ReKi               Z0_low           -  - -   "Z-component of the origin of the low-resolution spatial domain" m
+# Wake-Added Turbulence variables
+typedef   ^ InitOutputType ReKi               dX_WkAdT           -  - -   "The spacing of the WkAdT-resolution nodes in X direction" m
+typedef   ^ InitOutputType ReKi               dY_WkAdT           -  - -   "The spacing of the WkAdT-resolution nodes in Y direction" m
+typedef   ^ InitOutputType ReKi               dZ_WkAdT           -  - -   "The spacing of the WkAdT-resolution nodes in Z direction" m
+typedef   ^ InitOutputType IntKi              nX_WkAdT           -  - -   "Number of WkAdT-resolution spatial nodes in X direction" -
+typedef   ^ InitOutputType IntKi              nY_WkAdT           -  - -   "Number of WkAdT-resolution spatial nodes in Y direction" -
+typedef   ^ InitOutputType IntKi              nZ_WkAdT           -  - -   "Number of WkAdT-resolution spatial nodes in Z direction" -
+typedef   ^ InitOutputType ReKi               X0_WkAdT           -  - -   "X-component of the origin of the WkAdT-resolution spatial domain" m
+typedef   ^ InitOutputType ReKi               Y0_WkAdT           -  - -   "Y-component of the origin of the WkAdT-resolution spatial domain" m
+typedef   ^ InitOutputType ReKi               Z0_WkAdT           -  - -   "Z-component of the origin of the WkAdT-resolution spatial domain" m																																  
 
 # ..... States ....................................................................................................................
 # Define continuous (differentiable) states here:
 typedef   ^ ContinuousStateType InflowWind_ContinuousStateType     IfW   {:} - -  "Dummy IfW continuous states" -
+typedef   ^ ContinuousStateType InflowWind_ContinuousStateType     IfWwkAdT   {:} - -  "Dummy IfW continuous states" -
 
 # Define discrete (nondifferentiable) states here:
 typedef   ^ DiscreteStateType   InflowWind_DiscreteStateType     IfW   {:} - -  "Dummy IfW discrete states" -
+typedef   ^ DiscreteStateType   InflowWind_DiscreteStateType     IfWwkAdT   {:} - -  "Dummy IfW discrete states" -
 
 # Define constraint states here:
 typedef   ^ ConstraintStateType InflowWind_ConstraintStateType     IfW {:} - -  "Dummy IfW  constraint states" -
+typedef   ^ ConstraintStateType InflowWind_ConstraintStateType     IfWwkAdT {:} - -  "Dummy IfW  constraint states" -
 
 # Define any other states, including integer or logical states here:
 typedef   ^ OtherStateType      InflowWind_OtherStateType     IfW  {:} - -  "Dummy IfW   other states" -
+typedef   ^ OtherStateType      InflowWind_OtherStateType     IfWwkAdT  {:} - -  "Dummy IfW   other states" -
 
 # ..... Misc/Optimization variables.................................................................................................
 # Define any data that are used only for efficiency purposes (these variables are not associated with time):
@@ -137,6 +162,10 @@ typedef   ^ MiscVarType    InflowWind_InputType u_IfW_High    - - - "InflowWind 
 typedef   ^ MiscVarType    InflowWind_OutputType y_IfW_Low    - - - "InflowWind module outputs for the low-resolution grid" 
 typedef   ^ MiscVarType    InflowWind_OutputType y_IfW_High    - - - "InflowWind module outputs for the high-resolution grid" 
 
+typedef   ^ MiscVarType    SiKi      VwkAdT     {:}{:}{:}{:}{:} - -  "UVW component of wake added turbulence" m/s
+typedef   ^ MiscVarType    InflowWind_MiscVarType IfWwkAdT        {:} - - "InflowWind module misc vars"
+typedef   ^ MiscVarType    InflowWind_InputType u_IfW_WkAdT    - - - "InflowWind module inputs for the WkAdT-resolution grid" 
+typedef   ^ MiscVarType    InflowWind_OutputType y_IfW_WkAdT    - - - "InflowWind module outputs for the WkAdT-resolution grid" 
 # ..... Parameters ................................................................................................................
 # Define parameters here:
 # Time step for integration of continuous states (if a fixed-step integrator is used) and update of discrete states:
@@ -179,6 +208,26 @@ typedef   ^ ParameterType  IntKi            Mod_Meander        -  - -   "Spatial
 typedef   ^ ParameterType  ReKi             C_Meander          -  - -   "Calibrated parameter for wake meandering"      -
 typedef   ^ ParameterType  ReKi             C_ScaleDiam        -  - -   "Normalized wake volume radius for wake meandering (normalized by the wake diameter)"      -
 typedef   ^ ParameterType  InflowWind_ParameterType IfW        {:}  - -   "InflowWind module parameters" -
+# Wake-Added Turbulence variables
+typedef   ^ ParameterType  InflowWind_ParameterType IfWwkAdT        {:}  - -   "InflowWind module parameters" -
+typedef	  ^ ParameterType  LOGICAL	      WkAdT 	       -	   - - "Switch for turning on and off wake-added turbulence"	-
+typedef   ^ ParameterType  CHARACTER(1024)  WkAdTinflowFile  -  - -   "Name of file containing InflowWind module input parameters for wake added turbulence(quoted string)" -
+typedef   ^ ParameterType  ReKi             k_m1_WkAdT           -  - -   "Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.6]" -
+typedef   ^ ParameterType  ReKi             k_m2_WkAdT           -  - -   "Calibrated parameter for the influence of the radial velocity gradient of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.35]" -
+typedef   ^ ParameterType  ReKi             dX_WkAdT           -  - -   "The spacing of the WkAdT-resolution nodes in X direction" m
+typedef   ^ ParameterType  ReKi             dY_WkAdT           -  - -   "The spacing of the WkAdT-resolution nodes in Y direction" m
+typedef   ^ ParameterType  ReKi             dZ_WkAdT           -  - -   "The spacing of the WkAdT-resolution nodes in Z direction" m
+typedef   ^ ParameterType  ReKi             X0_WkAdT           -  - -   "X-component of the origin of the WkAdT-resolution spatial domain" m
+typedef   ^ ParameterType  ReKi             Y0_WkAdT           -  - -   "Y-component of the origin of the WkAdT-resolution spatial domain" m
+typedef   ^ ParameterType  ReKi             Z0_WkAdT           -  - -   "Z-component of the origin of the WkAdT-resolution spatial domain" m
+typedef   ^ ParameterType  IntKi            nX_WkAdT            -  - -   "Number  of spatial nodes in X direction for wake-added turbulence grid" -
+typedef   ^ ParameterType  IntKi            nY_WkAdT            -  - -   "Number  of spatial nodes in Y direction for wake-added turbulence grid" -
+typedef   ^ ParameterType  IntKi            nZ_WkAdT            -  - -   "Number  of spatial nodes in Z direction for wake-added turbulence grid" -
+typedef   ^ ParameterType  IntKi            NumGrid_WkAdT        -  - -   "Total number of WkAdT-resolution spatial nodes" -
+typedef   ^ ParameterType  ReKi             dXYZ_WkAdT        {3} - -   "XYZ-components of the spatial increment of the WkAdT-resolution domain" m
+typedef   ^ ParameterType  ReKi             Grid_WkAdT          {:}{:}    - -   "XYZ components (global positions) of the spatial discretization of the WkAdT-resolution spatial domain" m
+typedef   ^ ParameterType  ReKi             Grid_WkAdT_zCenter   -  - -    "Center point of wake-aadded Turbulence grid in z-direction" m
+typedef   ^ ParameterType  ReKi             P0_WkAdT          {3} - -   "origin of the WkAdT-resolution spatial domain" m
 # parameters for output  
 #typedef   ^ ParameterType  IntKi            NumOuts            -  - -   "Number of parameters in the output list (number of outputs requested)"      -
 typedef  ^  ParameterType  IntKi            WrDisSkp1           -  - -   "Number of time steps to skip plus one" -
@@ -210,4 +259,5 @@ typedef   ^ InputType      ReKi       p_plane      {:}{:}{:}              -     
 typedef   ^ InputType      ReKi       Vx_wake      {:}{:}{:}              -      -      "Axial wake velocity deficit at wake planes, distributed radially, for each turbine"      m/s
 typedef   ^ InputType      ReKi       Vr_wake      {:}{:}{:}              -      -      "Radial wake velocity deficit at wake planes, distributed radially, for each turbine"      m/s
 typedef   ^ InputType      ReKi       D_wake       {:}{:}                 -      -      "Wake diameters at wake planes for each turbine"     m
-
+typedef   ^ InputType      ReKi       k_mt         {:}{:}{:}              -      -      "Scaling factor k_mt(r,x) for wake-added turbulence"   
+typedef   ^ InputType      ReKi       x_plane      {:}{:}                 -      -      "Downwind distance from rotor to each wake plane"      m
