@@ -1133,20 +1133,20 @@ SUBROUTINE Farm_ReadPrimaryFile( InputFile, p, WD_InitInp, AWAE_InitInp, SC_Init
          RETURN        
       end if
 
-      ! k_m1_WkAdT - Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.6]:
+      ! k_m1_WkAdT - Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=1.44]:
    CALL ReadVarWDefault( UnIn, InputFile, WD_InitInp%k_m1_WkAdT, "k_m1_WkAdT", &
-      "Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.6]", &
-      0.6_ReKi, ErrStat2, ErrMsg2, UnEc)
+      "Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=1.44]", &
+      1.44_ReKi, ErrStat2, ErrMsg2, UnEc)
       CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
       if ( ErrStat >= AbortErrLev ) then
          call cleanup()
          RETURN        
       end if	  
 	  
-      ! k_m2_WkAdT - Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.6]:
+      ! k_m2_WkAdT - Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.84]:
    CALL ReadVarWDefault( UnIn, InputFile, WD_InitInp%k_m2_WkAdT, "k_m2_WkAdT", &
-      "Calibrated parameter for the influence of the radial velocity gradient of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.35]", &
-      0.35_ReKi, ErrStat2, ErrMsg2, UnEc)
+      "Calibrated parameter for the influence of the radial velocity gradient of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.84]", &
+      0.84_ReKi, ErrStat2, ErrMsg2, UnEc)
       CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
       if ( ErrStat >= AbortErrLev ) then
          call cleanup()
