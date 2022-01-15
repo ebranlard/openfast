@@ -244,7 +244,7 @@ subroutine LowResGridCalcOutput(n, u, p, y, m, errStat, errMsg)
       ! Loop over the entire grid of low resolution ambient wind data to compute:
       !    1) the disturbed flow at each point and 2) the averaged disturbed velocity of each wake plane
 
-   !$OMP PARALLEL DO PRIVATE(nx_low,ny_low,nz_low, nXYZ_low, n_wake, xhatBar_plane, x_end_plane,nt,np,ILo,x_start_plane,delta,deltad,p_tmp_plane,tmp_vec,r_vec_plane,r_tmp_plane,tmp_xhatBar_plane, Vx_wake_tmp,Vr_wake_tmp,nw,Vr_term,Vx_term,tmp_x,tmp_y,tmp_z,tmp_xhat_plane,tmp_rhat_plane,tmp_Vx_wake,tmp_Vr_wake,i,np1,errStat2) SHARED(m,u,p,maxPln,errStat,errMsg) DEFAULT(NONE)
+   !$OMP PARALLEL DO PRIVATE(nx_low,ny_low,nz_low, nXYZ_low, n_wake, xhatBar_plane,tmp_k_mt,V_wkadT_trans,V_wkadT_tmp,p_WkadT_tmp,gamma_xhat_plane,tmp_k_mt_interp,within,x_end_plane,nt,np,ILo,x_start_plane,delta,deltad,p_tmp_plane,tmp_vec,r_vec_plane,r_tmp_plane,tmp_xhatBar_plane, Vx_wake_tmp,Vr_wake_tmp,nw,Vr_term,Vx_term,tmp_x,tmp_y,tmp_z,tmp_xhat_plane,tmp_rhat_plane,tmp_Vx_wake,tmp_Vr_wake,i,np1,errStat2) SHARED(m,u,p,maxPln,errStat,errMsg,pi) DEFAULT(NONE)
    !do nz_low=0, p%nZ_low-1
    !   do ny_low=0, p%yZ_low-1
    !      do nx_low=0, p%nX_low-1
