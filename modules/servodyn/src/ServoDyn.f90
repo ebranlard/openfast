@@ -2663,6 +2663,7 @@ SUBROUTINE Pitch_CalcOutput( t, u, p, x, xd, z, OtherState, BlPitchCom, ElecPwr,
    REAL(ReKi)                                     :: factor
    REAL(ReKi)                                     :: PitManRat
    INTEGER(IntKi)                                 :: K           ! counter for blades
+   REAL(ReKi)                                     :: P0, A, omega, phi, t1, t2
 
 
 
@@ -2687,8 +2688,21 @@ SUBROUTINE Pitch_CalcOutput( t, u, p, x, xd, z, OtherState, BlPitchCom, ElecPwr,
             ! bjj: add this!
 
          CASE ( ControlMode_USER )              ! User-defined from routine PitchCntrl().
-
-            CALL PitchCntrl ( u%BlPitch, ElecPwr, u%LSS_Spd, u%TwrAccel, p%NumBl, t, p%DT, p%RootName, BlPitchCom )
+            if (p%BlPitchF(1)*180/PI>100) then
+               A     = p%PitManRat(1)
+               t1    = p%PitManRat(2) * 180/PI
+               t2    = p%PitManRat(3) * 180/PI
+               P0    = p%BlPitchInit(1)
+               !print*,'>>> User Pitch Control step', P0, A, t1, t2
+               CALL PitchCntrlStep (t, P0, A, t1, t2, u%BlPitch, ElecPwr, u%LSS_Spd, u%TwrAccel, p%NumBl, t, p%DT, p%RootName, BlPitchCom )
+            else
+               A     = p%PitManRat(1)
+               omega = p%PitManRat(2) * 180/PI
+               phi   = p%PitManRat(3) * 180/PI
+               P0    = p%BlPitchInit(1)
+               !print*,'>>> User Pitch Control Sinusoidal', P0, A, omega, phi
+               CALL PitchCntrlSinusoidal (t, P0, A, omega, phi, u%BlPitch, ElecPwr, u%LSS_Spd, u%TwrAccel, p%NumBl, t, p%DT, p%RootName, BlPitchCom )
+            endif
 
          CASE ( ControlMode_EXTERN )              ! User-defined from Simulink or LabVIEW.
 
