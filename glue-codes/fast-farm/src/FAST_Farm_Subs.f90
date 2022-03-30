@@ -1542,6 +1542,7 @@ SUBROUTINE Farm_InitWD( farm, WD_InitInp, ErrStat, ErrMsg )
          !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++         
          
          WD_InitInp%TurbNum     = nt
+         WD_InitInp%OutFileRoot = farm%p%OutFileRoot
          
             ! note that WD_Init has Interval as INTENT(IN) so, we don't need to worry about overwriting farm%p%dt_low here:
          call WD_Init( WD_InitInp, farm%WD(nt)%u, farm%WD(nt)%p, farm%WD(nt)%x, farm%WD(nt)%xd, farm%WD(nt)%z, &

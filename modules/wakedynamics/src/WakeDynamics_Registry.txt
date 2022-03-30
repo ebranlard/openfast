@@ -64,6 +64,7 @@ typedef  ^                 WD_InputFileType  ReKi            k_m2_WkAdT       - 
 #   e.g., the name of the input file, the file root name, etc.
 typedef ^  InitInputType WD_InputFileType InputFileData  - - -   "FAST.Farm input-file data for wake dynamics" -
 typedef ^  InitInputType IntKi            TurbNum        - 0 -   "Turbine ID number (start with 1; end with number of turbines)"      -
+typedef ^  InitInputType CHARACTER(1024)  OutFileRoot    -  - -  "The root name derived from the primary FAST.Farm input file" -
 
 
 # Define outputs from the initialization routine here:
@@ -95,8 +96,9 @@ typedef ^  DiscreteStateType   ReKi  D_rotor_filt      {:}    - -   "Time-filter
 typedef ^  DiscreteStateType   ReKi  Vx_rel_disk_filt   -     - -   "Time-filtered rotor-disk-averaged relative wind speed (ambient + deficits + motion), normal to disk"      m/s
 typedef ^  DiscreteStateType   ReKi  Ct_azavg_filt     {:}    - -   "Time-filtered azimuthally averaged thrust force coefficient (normal to disk), distributed radially"      -
 typedef ^  DiscreteStateType   ReKi  Cq_azavg_filt     {:}    - -   "Time-filtered azimuthally averaged torque coefficient (normal to disk), distributed radially"      -
-# TODO should be output only and 3D
-typedef ^  DiscreteStateType   ReKi  k_mt              {:}{:} - -   "Scaling factor k_mt(r,x) for wake-added turbulence"    -
+typedef ^  DiscreteStateType   ReKi  Vx_turb           {:}{:}{:} - - "Non-scaled turbulence for each wake plane"      -
+typedef ^  DiscreteStateType   ReKi  Vy_turb           {:}{:}{:} - - "Non-scaled turbulence for each wake plane"      -
+typedef ^  DiscreteStateType   ReKi  Vz_turb           {:}{:}{:} - - "Non-scaled turbulence for each wake plane"      -
 
 # Define constraint states here:
 typedef   ^               ConstraintStateType ReKi     DummyConstrState - - - "Remove this variable if you have constraint states" -
@@ -128,8 +130,7 @@ typedef   ^         MiscVarType   ReKi  r_wake  {:}    - -   ""
 typedef   ^         MiscVarType   ReKi  Vx_high {:}    - -   ""    
 typedef   ^         MiscVarType   ReKi  Vx_polar {:}    - -   "Vx as function of r for Carteisna implementation"    
 typedef   ^         MiscVarType   ReKi  Vt_wake {:}    - -   "Vx as function of r for Carteisna implementation"    
-# TODO should be xd
-typedef   ^         MiscVarType   ReKi  Vx_wind_disk_Plane  {:}    - -   "Rotor-disk-averaged ambient wind speed, normal to planes in each wake plane"    m/s
+typedef   ^             ^         ReKi  k_mt    {:}{:}{:} - -   "Scaling factor k_mt(y,z,x) for wake-added turbulence"    -
 
 # ..... Parameters ................................................................................................................
 # Define parameters here:
@@ -169,6 +170,8 @@ typedef ^ ParameterType  ReKi             C_WakeDiam     -  - -   "Calibrated pa
 typedef ^ ParameterType  IntKi            FilterInit     - - -    "Switch to filter the initial wake plane deficit and select the number of grid points for the filter {0: no filter, 1: filter of size 1} or DEFAULT [DEFAULT=0: if Mod_Wake is 1 or 3, or DEFAULT=2: if Mod_Wwake is 2] (switch)"
 typedef ^ ParameterType  ReKi             k_vCurl        - - -    "Calibrated parameter for the eddy viscosity in curled-wake model [>=0.0]" - 
 typedef ^ ParameterType  Logical          OutAllPlanes   - - -    "Output all planes" - 
+typedef ^ ParameterType  CHARACTER(1024)  OutFileRoot    - - -    "The root name derived from the primary FAST.Farm input file" -
+typedef ^ ParameterType  IntKi            TurbNum        - 0 -    "Turbine ID number (start with 1; end with number of turbines)"      -
 # wake added turbulence (WAT) parameters
 typedef ^ ParameterType  LOGICAL          WkAdT          -  - -   "Switch for turning on and off wake-added turbulence" -
 typedef ^ ParameterType  ReKi             k_m1_WkAdT     -  - -   "Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.6]" -
