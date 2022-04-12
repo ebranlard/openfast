@@ -33,7 +33,6 @@ MODULE AWAE_IO
    character(*),   parameter  :: AWAE_Nickname = 'AWAE'
     
    public :: AWAE_IO_InitGridInfo
-   public :: AWAE_IO_WkAdTGridInfo								  
    public :: ReadLowResWindFile
    
    contains
@@ -519,80 +518,6 @@ subroutine AWAE_IO_InitGridInfo(InitInp, p, InitOut, errStat, errMsg)
    
 end subroutine AWAE_IO_InitGridInfo
 
-
-subroutine AWAE_IO_WkAdTGridInfo(InitInp, p, errStat, errMsg)
-
-   type(AWAE_InitInputType),    intent(in   ) :: InitInp        !< Input data for initialization routine
-   type(AWAE_ParameterType),    intent(inout) :: p              !< Parameters
-   integer(IntKi),              intent(  out) :: errStat
-   character(*),                intent(  out) :: errMsg
-
-   integer(IntKi)                             :: errStat2      ! temporary error status of the operation
-   character(ErrMsgLen)                       :: errMsg2       ! temporary error message 
-   character(*), parameter                    :: RoutineName = 'AWAE_IO_WkAdTGridInfo'
-   integer(IntKi)                             :: nXYZ_WkAdT, nx_WkAdT, ny_WkAdT, nz_WkAdT
-   integer(IntKi)                             :: dims(3)              ! dimension of the 3D grid (nX,nY,nZ)
-   real(ReKi)                                 :: origin(3)            ! the lower-left corner of the 3D grid (X0,Y0,Z0)
-   real(ReKi)                                 :: gridSpacing(3)       ! spacing between grid points in each of the 3 directions (dX,dY,dZ)
-   
-   
-   errStat = ErrID_None
-   errMsg  = ""
-   
-
-   ! Using InflowWind, so data has been passed in via the InitInp data structure
-   origin(1)      = InitInp%InputFileData%X0_WkAdT
-   origin(2)      = InitInp%InputFileData%Y0_WkAdT
-   origin(3)      = InitInp%InputFileData%Z0_WkAdT
-   dims(1)        = InitInp%InputFileData%nx_WkAdT
-   dims(2)        = InitInp%InputFileData%ny_WkAdT
-   dims(3)        = InitInp%InputFileData%nz_WkAdT
-   gridSpacing(1) = InitInp%InputFileData%dX_WkAdT
-   gridSpacing(2) = InitInp%InputFileData%dY_WkAdT
-   gridSpacing(3) = InitInp%InputFileData%dZ_WkAdT
-
-	  
-
-   if ( (gridSpacing(1) <= 0.0_ReKi) .or. (gridSpacing(2) <= 0.0_ReKi) .or. (gridSpacing(3) <= 0.0_ReKi) ) &
-      call SetErrStat ( ErrID_Fatal, 'The WkAdT spatial resolution must be greater than zero in each spatial direction. ', errStat, errMsg, RoutineName )
-
-   p%X0_WkAdT           = origin(1)
-   p%Y0_WkAdT           = origin(2)
-   p%Z0_WkAdT           = origin(3) 
-   p%nX_WkAdT           = dims(1)
-   p%nY_WkAdT           = dims(2)
-   p%nZ_WkAdT           = dims(3) 
-   p%dX_WkAdT           = gridSpacing(1)
-   p%dY_WkAdT           = gridSpacing(2)
-   p%dZ_WkAdT           = gridSpacing(3)
-   
-   p%NumGrid_WkAdT      = p%nx_WkAdT*p%ny_WkAdT*p%nz_WkAdT
-   p%dXYZ_WkAdT         = gridSpacing
-   p%P0_WkAdT           = origin
-      
-   allocate( p%Grid_WkAdT(3,p%NumGrid_WkAdT),stat=errStat2)
-      if (errStat2 /= 0) then
-         call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for Grid_WkAdT.', errStat, errMsg, RoutineName )
-         return
-      end if
-
-   nXYZ_WkAdT = 0
-   do nz_WkAdT=0, p%nz_WkAdT-1 
-      do ny_WkAdT=0, p%ny_WkAdT-1
-         do nx_WkAdT=0, p%nx_WkAdT-1
-            nXYZ_WkAdT = nXYZ_WkAdT + 1
-            p%Grid_WkAdT(1,nXYZ_WkAdT) = origin(1) + nx_WkAdT*gridSpacing(1)
-            p%Grid_WkAdT(2,nXYZ_WkAdT) = origin(2) + ny_WkAdT*gridSpacing(2)
-            p%Grid_WkAdT(3,nXYZ_WkAdT) = origin(3) + nz_WkAdT*gridSpacing(3)  
-         end do
-      end do
-   end do
-    
-   ! Calculate center of grid in z-direction
-   p%Grid_WkAdT_zCenter = origin(3) + (dims(3)-1)*gridSpacing(3)/2
- 
- 
-end subroutine AWAE_IO_WkAdTGridInfo
 !----------------------------------------------------------------------------------------------------------------------------------
 SUBROUTINE AWAE_PrintSum(  p, u, y, ErrStat, ErrMsg )
 ! This routine generates the summary file, which contains a summary of input file options.

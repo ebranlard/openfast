@@ -247,8 +247,6 @@ SUBROUTINE Farm_Initialize( farm, InputFile, ErrStat, ErrMsg )
    AWAE_InitInput%n_high_low                 = farm%p%n_high_low
    AWAE_InitInput%NumDT                      = farm%p%n_TMax
    AWAE_InitInput%OutFileRoot                = farm%p%OutFileRoot
-   ! Wake Added Turbulence (WAT) Parameters
-   AWAE_InitInput%InputFileData%WkAdT        = WD_InitInput%InputFileData%WkAdT
    call AWAE_Init( AWAE_InitInput, farm%AWAE%u, farm%AWAE%p, farm%AWAE%x, farm%AWAE%xd, farm%AWAE%z, farm%AWAE%OtherSt, farm%AWAE%y, &
                    farm%AWAE%m, farm%p%DT_low, AWAE_InitOutput, ErrStat2, ErrMsg2 )
       CALL SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
@@ -1046,21 +1044,17 @@ SUBROUTINE Farm_ReadPrimaryFile( InputFile, p, WD_InitInp, AWAE_InitInp, SC_Init
            AWAE_InitInp%Mod_Projection=0
       endif
    endif
+   !----------------------- WAKE-ADDED TURBULENCE ------------------------------------------
    ! Read WAT variables
-   CALL ReadVar( UnIn, InputFile, WD_InitInp%WkAdT, "WkAdT", "Switch for turning on and off wake-added turbulence", ErrStat2, ErrMsg2, UnEc); if(failed()) return
-   CALL ReadVar( UnIn, InputFile, AWAE_InitInp%WkAdTinflowFile, "InflowFile", "Name of file containing InflowWind module input parameters for wake added turbulence(quoted string)", ErrStat2, ErrMsg2, UnEc); if(failed()) return
-   CALL ReadVar( UnIn, InputFile, AWAE_InitInp%nX_WkAdT, "nX_WkAdT", "Number  of spatial nodes in X direction for wake-added turbulence grid (-) [>=2]", ErrStat2, ErrMsg2, UnEc); if(failed()) return
-   CALL ReadVar( UnIn, InputFile, AWAE_InitInp%nY_WkAdT, "nY_WkAdT", "Number  of spatial nodes in Y direction for wake-added turbulence grid (-) [>=2]", ErrStat2, ErrMsg2, UnEc); if(failed()) return
-   CALL ReadVar( UnIn, InputFile, AWAE_InitInp%nZ_WkAdT, "nZ_WkAdT", "Number  of spatial nodes in Z direction for wake-added turbulence grid (-) [>=2]", ErrStat2, ErrMsg2, UnEc); if(failed()) return
-   CALL ReadVar( UnIn, InputFile, AWAE_InitInp%X0_WkAdT, "X0_WkAdT", "Origin  of spatial nodes in X direction for wake-added turbulence grid (m)", ErrStat2, ErrMsg2, UnEc); if(failed()) return
-   CALL ReadVar( UnIn, InputFile, AWAE_InitInp%Y0_WkAdT, "Y0_WkAdT", "Origin  of spatial nodes in Y direction for wake-added turbulence grid (m)", ErrStat2, ErrMsg2, UnEc); if(failed()) return
-   CALL ReadVar( UnIn, InputFile, AWAE_InitInp%Z0_WkAdT, "Z0_WkAdT", "Origin  of spatial nodes in Z direction for wake-added turbulence grid (m)", ErrStat2, ErrMsg2, UnEc); if(failed()) return
-   CALL ReadVar( UnIn, InputFile, AWAE_InitInp%dX_WkAdT, "dX_WkAdT", "Spacing of spatial nodes in X direction for wake-added turbulence grid (m) [>0.0]", ErrStat2, ErrMsg2, UnEc); if(failed()) return
-   CALL ReadVar( UnIn, InputFile, AWAE_InitInp%dY_WkAdT, "dY_WkAdT", "Spacing of spatial nodes in Y direction for wake-added turbulence grid (m) [>0.0]", ErrStat2, ErrMsg2, UnEc); if(failed()) return
-   CALL ReadVar( UnIn, InputFile, AWAE_InitInp%dZ_WkAdT, "dZ_WkAdT", "Spacing of spatial nodes in Z direction for wake-added turbulence grid (m) [>0.0]", ErrStat2, ErrMsg2, UnEc); if(failed()) return
+   CALL ReadCom( UnIn, InputFile, 'Section Header: Wake-added turbulence', ErrStat2, ErrMsg2, UnEc )
+   CALL ReadVar( UnIn, InputFile, WD_InitInp%WkAdT, "WAT", "Switch for turning on and off wake-added turbulence", ErrStat2, ErrMsg2, UnEc); if(failed()) return
+   ! TODO
+   CALL ReadCom( UnIn, InputFile, 'dummy predef', ErrStat2, ErrMsg2, UnEc )
+   CALL ReadCom( UnIn, InputFile, 'dummy user', ErrStat2, ErrMsg2, UnEc )
+   CALL ReadCom( UnIn, InputFile, 'dummy userdx', ErrStat2, ErrMsg2, UnEc )
    CALL ReadVarWDefault( UnIn, InputFile, WD_InitInp%k_m1_WkAdT, "k_m1_WkAdT",  "Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=1.44]", 1.44_ReKi, ErrStat2, ErrMsg2, UnEc); if(failed()) return
    CALL ReadVarWDefault( UnIn, InputFile, WD_InitInp%k_m2_WkAdT, "k_m2_WkAdT",  "Calibrated parameter for the influence of the radial velocity gradient of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.84]",  0.84_ReKi, ErrStat2, ErrMsg2, UnEc); if(failed()) return
-   IF ( PathIsRelative( AWAE_InitInp%WkAdTinflowFile ) )AWAE_InitInp%WkAdTinflowFile = TRIM(PriPath)//TRIM(AWAE_InitInp%WkAdTinflowFile)
+   !IF ( PathIsRelative( p%File ) )p%File = TRIM(PriPath)//TRIM(p%File)
 
    !---------------------- VISUALIZATION --------------------------------------------------
    CALL ReadCom( UnIn, InputFile, 'Section Header: Visualization', ErrStat2, ErrMsg2, UnEc )
@@ -1718,7 +1712,6 @@ subroutine FARM_InitialCO(farm, ErrStat, ErrMsg)
    farm%AWAE%u%Vy_wake    = 0.0_ReKi     ! Horizontal wake velocity deficit at wake planes, distributed radially, for each turbine
    farm%AWAE%u%Vz_wake    = 0.0_ReKi     ! "Vertical" wake velocity deficit at wake planes, distributed radially, for each turbine
    farm%AWAE%u%D_wake     = 0.0_ReKi     ! Wake diameters at wake planes for each turbine      
-   farm%AWAE%m%VwkAdT     = 0.0_SiKi     ! Wake added turbulence (WAT) velocities    
    
       !--------------------
       ! 1b. CALL AWAE_CO      

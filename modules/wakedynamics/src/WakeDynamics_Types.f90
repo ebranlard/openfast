@@ -116,6 +116,8 @@ IMPLICIT NONE
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: Ct_azavg_filt      !< Time-filtered azimuthally averaged thrust force coefficient (normal to disk), distributed radially [-]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: Cq_azavg_filt      !< Time-filtered azimuthally averaged torque coefficient (normal to disk), distributed radially [-]
     REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: Vx_turb      !< Non-scaled turbulence for each wake plane [-]
+    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: Vy_turb      !< Non-scaled turbulence for each wake plane [-]
+    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: Vz_turb      !< Non-scaled turbulence for each wake plane [-]
   END TYPE WD_DiscreteStateType
 ! =======================
 ! =========  WD_ConstraintStateType  =======
@@ -1458,6 +1460,38 @@ IF (ALLOCATED(SrcDiscStateData%Vx_turb)) THEN
   END IF
     DstDiscStateData%Vx_turb = SrcDiscStateData%Vx_turb
 ENDIF
+IF (ALLOCATED(SrcDiscStateData%Vy_turb)) THEN
+  i1_l = LBOUND(SrcDiscStateData%Vy_turb,1)
+  i1_u = UBOUND(SrcDiscStateData%Vy_turb,1)
+  i2_l = LBOUND(SrcDiscStateData%Vy_turb,2)
+  i2_u = UBOUND(SrcDiscStateData%Vy_turb,2)
+  i3_l = LBOUND(SrcDiscStateData%Vy_turb,3)
+  i3_u = UBOUND(SrcDiscStateData%Vy_turb,3)
+  IF (.NOT. ALLOCATED(DstDiscStateData%Vy_turb)) THEN 
+    ALLOCATE(DstDiscStateData%Vy_turb(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+      CALL SetErrStat(ErrID_Fatal, 'Error allocating DstDiscStateData%Vy_turb.', ErrStat, ErrMsg,RoutineName)
+      RETURN
+    END IF
+  END IF
+    DstDiscStateData%Vy_turb = SrcDiscStateData%Vy_turb
+ENDIF
+IF (ALLOCATED(SrcDiscStateData%Vz_turb)) THEN
+  i1_l = LBOUND(SrcDiscStateData%Vz_turb,1)
+  i1_u = UBOUND(SrcDiscStateData%Vz_turb,1)
+  i2_l = LBOUND(SrcDiscStateData%Vz_turb,2)
+  i2_u = UBOUND(SrcDiscStateData%Vz_turb,2)
+  i3_l = LBOUND(SrcDiscStateData%Vz_turb,3)
+  i3_u = UBOUND(SrcDiscStateData%Vz_turb,3)
+  IF (.NOT. ALLOCATED(DstDiscStateData%Vz_turb)) THEN 
+    ALLOCATE(DstDiscStateData%Vz_turb(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+      CALL SetErrStat(ErrID_Fatal, 'Error allocating DstDiscStateData%Vz_turb.', ErrStat, ErrMsg,RoutineName)
+      RETURN
+    END IF
+  END IF
+    DstDiscStateData%Vz_turb = SrcDiscStateData%Vz_turb
+ENDIF
  END SUBROUTINE WD_CopyDiscState
 
  SUBROUTINE WD_DestroyDiscState( DiscStateData, ErrStat, ErrMsg )
@@ -1516,6 +1550,12 @@ IF (ALLOCATED(DiscStateData%Cq_azavg_filt)) THEN
 ENDIF
 IF (ALLOCATED(DiscStateData%Vx_turb)) THEN
   DEALLOCATE(DiscStateData%Vx_turb)
+ENDIF
+IF (ALLOCATED(DiscStateData%Vy_turb)) THEN
+  DEALLOCATE(DiscStateData%Vy_turb)
+ENDIF
+IF (ALLOCATED(DiscStateData%Vz_turb)) THEN
+  DEALLOCATE(DiscStateData%Vz_turb)
 ENDIF
  END SUBROUTINE WD_DestroyDiscState
 
@@ -1636,6 +1676,16 @@ ENDIF
   IF ( ALLOCATED(InData%Vx_turb) ) THEN
     Int_BufSz   = Int_BufSz   + 2*3  ! Vx_turb upper/lower bounds for each dimension
       Re_BufSz   = Re_BufSz   + SIZE(InData%Vx_turb)  ! Vx_turb
+  END IF
+  Int_BufSz   = Int_BufSz   + 1     ! Vy_turb allocated yes/no
+  IF ( ALLOCATED(InData%Vy_turb) ) THEN
+    Int_BufSz   = Int_BufSz   + 2*3  ! Vy_turb upper/lower bounds for each dimension
+      Re_BufSz   = Re_BufSz   + SIZE(InData%Vy_turb)  ! Vy_turb
+  END IF
+  Int_BufSz   = Int_BufSz   + 1     ! Vz_turb allocated yes/no
+  IF ( ALLOCATED(InData%Vz_turb) ) THEN
+    Int_BufSz   = Int_BufSz   + 2*3  ! Vz_turb upper/lower bounds for each dimension
+      Re_BufSz   = Re_BufSz   + SIZE(InData%Vz_turb)  ! Vz_turb
   END IF
   IF ( Re_BufSz  .GT. 0 ) THEN 
      ALLOCATE( ReKiBuf(  Re_BufSz  ), STAT=ErrStat2 )
@@ -1970,6 +2020,56 @@ ENDIF
         DO i2 = LBOUND(InData%Vx_turb,2), UBOUND(InData%Vx_turb,2)
           DO i1 = LBOUND(InData%Vx_turb,1), UBOUND(InData%Vx_turb,1)
             ReKiBuf(Re_Xferred) = InData%Vx_turb(i1,i2,i3)
+            Re_Xferred = Re_Xferred + 1
+          END DO
+        END DO
+      END DO
+  END IF
+  IF ( .NOT. ALLOCATED(InData%Vy_turb) ) THEN
+    IntKiBuf( Int_Xferred ) = 0
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    IntKiBuf( Int_Xferred ) = 1
+    Int_Xferred = Int_Xferred + 1
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%Vy_turb,1)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%Vy_turb,1)
+    Int_Xferred = Int_Xferred + 2
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%Vy_turb,2)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%Vy_turb,2)
+    Int_Xferred = Int_Xferred + 2
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%Vy_turb,3)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%Vy_turb,3)
+    Int_Xferred = Int_Xferred + 2
+
+      DO i3 = LBOUND(InData%Vy_turb,3), UBOUND(InData%Vy_turb,3)
+        DO i2 = LBOUND(InData%Vy_turb,2), UBOUND(InData%Vy_turb,2)
+          DO i1 = LBOUND(InData%Vy_turb,1), UBOUND(InData%Vy_turb,1)
+            ReKiBuf(Re_Xferred) = InData%Vy_turb(i1,i2,i3)
+            Re_Xferred = Re_Xferred + 1
+          END DO
+        END DO
+      END DO
+  END IF
+  IF ( .NOT. ALLOCATED(InData%Vz_turb) ) THEN
+    IntKiBuf( Int_Xferred ) = 0
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    IntKiBuf( Int_Xferred ) = 1
+    Int_Xferred = Int_Xferred + 1
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%Vz_turb,1)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%Vz_turb,1)
+    Int_Xferred = Int_Xferred + 2
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%Vz_turb,2)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%Vz_turb,2)
+    Int_Xferred = Int_Xferred + 2
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%Vz_turb,3)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%Vz_turb,3)
+    Int_Xferred = Int_Xferred + 2
+
+      DO i3 = LBOUND(InData%Vz_turb,3), UBOUND(InData%Vz_turb,3)
+        DO i2 = LBOUND(InData%Vz_turb,2), UBOUND(InData%Vz_turb,2)
+          DO i1 = LBOUND(InData%Vz_turb,1), UBOUND(InData%Vz_turb,1)
+            ReKiBuf(Re_Xferred) = InData%Vz_turb(i1,i2,i3)
             Re_Xferred = Re_Xferred + 1
           END DO
         END DO
@@ -2360,6 +2460,62 @@ ENDIF
         DO i2 = LBOUND(OutData%Vx_turb,2), UBOUND(OutData%Vx_turb,2)
           DO i1 = LBOUND(OutData%Vx_turb,1), UBOUND(OutData%Vx_turb,1)
             OutData%Vx_turb(i1,i2,i3) = ReKiBuf(Re_Xferred)
+            Re_Xferred = Re_Xferred + 1
+          END DO
+        END DO
+      END DO
+  END IF
+  IF ( IntKiBuf( Int_Xferred ) == 0 ) THEN  ! Vy_turb not allocated
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    Int_Xferred = Int_Xferred + 1
+    i1_l = IntKiBuf( Int_Xferred    )
+    i1_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    i2_l = IntKiBuf( Int_Xferred    )
+    i2_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    i3_l = IntKiBuf( Int_Xferred    )
+    i3_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    IF (ALLOCATED(OutData%Vy_turb)) DEALLOCATE(OutData%Vy_turb)
+    ALLOCATE(OutData%Vy_turb(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+       CALL SetErrStat(ErrID_Fatal, 'Error allocating OutData%Vy_turb.', ErrStat, ErrMsg,RoutineName)
+       RETURN
+    END IF
+      DO i3 = LBOUND(OutData%Vy_turb,3), UBOUND(OutData%Vy_turb,3)
+        DO i2 = LBOUND(OutData%Vy_turb,2), UBOUND(OutData%Vy_turb,2)
+          DO i1 = LBOUND(OutData%Vy_turb,1), UBOUND(OutData%Vy_turb,1)
+            OutData%Vy_turb(i1,i2,i3) = ReKiBuf(Re_Xferred)
+            Re_Xferred = Re_Xferred + 1
+          END DO
+        END DO
+      END DO
+  END IF
+  IF ( IntKiBuf( Int_Xferred ) == 0 ) THEN  ! Vz_turb not allocated
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    Int_Xferred = Int_Xferred + 1
+    i1_l = IntKiBuf( Int_Xferred    )
+    i1_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    i2_l = IntKiBuf( Int_Xferred    )
+    i2_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    i3_l = IntKiBuf( Int_Xferred    )
+    i3_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    IF (ALLOCATED(OutData%Vz_turb)) DEALLOCATE(OutData%Vz_turb)
+    ALLOCATE(OutData%Vz_turb(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+       CALL SetErrStat(ErrID_Fatal, 'Error allocating OutData%Vz_turb.', ErrStat, ErrMsg,RoutineName)
+       RETURN
+    END IF
+      DO i3 = LBOUND(OutData%Vz_turb,3), UBOUND(OutData%Vz_turb,3)
+        DO i2 = LBOUND(OutData%Vz_turb,2), UBOUND(OutData%Vz_turb,2)
+          DO i1 = LBOUND(OutData%Vz_turb,1), UBOUND(OutData%Vz_turb,1)
+            OutData%Vz_turb(i1,i2,i3) = ReKiBuf(Re_Xferred)
             Re_Xferred = Re_Xferred + 1
           END DO
         END DO
