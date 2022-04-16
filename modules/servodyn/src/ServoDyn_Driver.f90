@@ -89,18 +89,75 @@ PROGRAM SrvD_Driver
       InitInData%RootName      = OutFile(1:(len_trim(OutFile)-4))
       InitInData%NumBl         = 3
       InitInData%gravity       = 9.81 !m/s^2
-      InitInData%r_N_O_G       = (/ 90.0, 0.0, 0.0 /) ! m, position of nacelle (for NTMD)
-      InitInData%r_TwrBase     = (/  0.0, 0.0, 0.0 /) ! m, position of tower base (for TTMD)
+!FIXME: why are these hard coded!!!?
+      ! StrucCtrl nacelle position
+      InitInData%NacRefPos     = (/ 90.0, 0.0, 0.0 /) ! m, reference position of nacelle (for NStC)
+      InitInData%NacTransDisp  = (/  0.0, 0.0, 0.0 /) ! m, initial displacement of nacelle (for NStC)
+      InitInData%NacRefOrient  = 0.0_R8Ki
+      InitInData%NacOrient     = 0.0_R8Ki
+      do j=1,3
+         InitInData%NacRefOrient(j,j) = 1.0_R8Ki
+         InitInData%NacOrient(j,j)    = 1.0_R8Ki
+      enddo
+      ! StrucCtrl tower
+      InitInData%TwrBaseRefPos    = (/  0.0, 0.0, 0.0 /) ! m, reference position of tower base (for TStC)
+      InitInData%TwrBaseTransDisp = (/  0.0, 0.0, 0.0 /) ! m, initial displacement tower base (for TStC)
+      InitInData%TwrBaseRefOrient = 0.0_R8Ki
+      InitInData%TwrBaseOrient    = 0.0_R8Ki
+      do j=1,3
+         InitInData%TwrBaseRefOrient(j,j) = 1.0_R8Ki
+         InitInData%TwrBaseOrient(j,j)    = 1.0_R8Ki
+      enddo
+      ! StrucCtrl single blade
+      call AllocAry(InitInData%BladeRootRefPos,        3,1, 'InitInData%BladeRootRefPos',     ErrStat,ErrMsg)
+         IF ( ErrStat /= ErrID_None ) THEN
+            CALL WrScr( ErrMsg )
+            IF (ErrStat >= AbortErrLev) call ProgAbort('')
+         END IF
+      call AllocAry(InitInData%BladeRootTransDisp,     3,1, 'InitInData%BladeRootTransDisp',  ErrStat,ErrMsg)
+         IF ( ErrStat /= ErrID_None ) THEN
+            CALL WrScr( ErrMsg )
+            IF (ErrStat >= AbortErrLev) call ProgAbort('')
+         END IF
+      call AllocAry(InitInData%BladeRootRefOrient,   3,3,1, 'InitInData%BladeRootRefOrient',  ErrStat,ErrMsg)
+         IF ( ErrStat /= ErrID_None ) THEN
+            CALL WrScr( ErrMsg )
+            IF (ErrStat >= AbortErrLev) call ProgAbort('')
+         END IF
+      call AllocAry(InitInData%BladeRootOrient,      3,3,1, 'InitInData%BladeRootOrient',     ErrStat,ErrMsg)
+         IF ( ErrStat /= ErrID_None ) THEN
+            CALL WrScr( ErrMsg )
+            IF (ErrStat >= AbortErrLev) call ProgAbort('')
+         END IF
+! FIXME: This isn't a very useful position to put a blade
+      InitInData%BladeRootRefPos(1:3,1)    = (/  0.0, 0.0, 0.0 /) ! m, reference position of blade root (for BStC)
+      InitInData%BladeRootTransDisp(1:3,1) = (/  0.0, 0.0, 0.0 /) ! m, initial dispalcement of blade root (for BStC)
+      InitInData%BladeRootRefOrient        = 0.0_R8Ki
+      InitInData%BladeRootOrient           = 0.0_R8Ki
+      do j=1,3
+         InitInData%BladeRootRefOrient(j,j,1) = 1.0_R8Ki
+         InitInData%BladeRootOrient(j,j,1)    = 1.0_R8Ki
+      enddo
+      ! StrucCtrl substructure
+      InitInData%PtfmRefPos      = (/  0.0, 0.0, 0.0 /) ! m, reference position of Ptfm
+      InitInData%PtfmTransDisp   = (/  0.0, 0.0, 0.0 /) ! m, initial displacement of Ptfm
+      InitInData%PtfmRefOrient   = 0.0_R8Ki
+      InitInData%PtfmOrient      = 0.0_R8Ki
+      do j=1,3
+         InitInData%PtfmRefOrient(j,j) = 1.0_R8Ki
+         InitInData%PtfmOrient(j,j)    = 1.0_R8Ki
+      enddo
       InitInData%TMax          = 10.0 !s
       InitInData%AirDens       = 1.225 !kg/m^3
       InitInData%AvgWindSpeed  = 10.0 !m/s
       InitInData%Linearize     = .false.
-      InitInData%NumSC2Ctrl    = 0
-      InitInData%NumCtrl2SC    = 0
+      InitInData%NumSC2Ctrl    = 0     ! SuperController
+      InitInData%NumCtrl2SC    = 0     ! SuperController
             
       CALL AllocAry(InitInData%BlPitchInit, InitInData%NumBl, 'BlPitchInit', ErrStat, ErrMsg)
          IF ( ErrStat /= ErrID_None ) THEN
             CALL WrScr( ErrMsg )
+            IF (ErrStat >= AbortErrLev) call ProgAbort('')
          END IF
       InitInData%BlPitchInit = 5.0*pi/180.0 ! radians
    
