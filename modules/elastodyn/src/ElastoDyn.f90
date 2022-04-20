@@ -4803,6 +4803,7 @@ SUBROUTINE Coeff(p,InputFileData, ErrStat, ErrMsg)
       ! Calculate the mass of the current element
 
          p%BElmntMass(J,K) = p%MassB(K,J)*p%DRNodes(J)                        ! Mass of blade element J
+         print*,'ElmMass',J, p%BElmntMass(J,K), p%DRNodes(J)
 
 
       ! Integrate to find some blade properties which will be output in .fsm
@@ -4838,6 +4839,8 @@ SUBROUTINE Coeff(p,InputFileData, ErrStat, ErrMsg)
          p%RotMass      = p%RotMass      + p%BldMass    (K)
          p%RotIner      = p%RotIner      + ( p%SecondMom(K) + p%BldMass  (K)*p%HubRad*( 2.0*p%BldCG(K) + p%HubRad ) )*( p%CosPreC(K)**2 )
       END IF
+      print*,'BldMass',p%BldMass(K)
+
 
    ENDDO ! K - Blades
 
@@ -10251,25 +10254,25 @@ END IF
    WRITE (UNSU,'(A)'     )'Tower generalized frequencies (with top mass and stiffnening):'
    WRITE (UNSU,'(4ES14.6)') p%FreqTFA(1,2), p%FreqTFA(2,2), p%FreqTSS(1,2), p%FreqTSS(2,2) 
    WRITE (UNSU,'(A)'     ) 'Tower generalized mass matrix (without top mass):'
-   WRITE (UNSU,'(4ES14.6)') MTFA(1,1), MTFA(1,2), 0          , 0
-   WRITE (UNSU,'(4ES14.6)') MTFA(2,1), MTFA(2,2), 0          , 0
-   WRITE (UNSU,'(4ES14.6)') 0        , 0        , MTSS(1,1), MTSS(1,2)
-   WRITE (UNSU,'(4ES14.6)') 0        , 0        , MTSS(2,1), MTSS(2,2)
+   WRITE (UNSU,'(4ES14.6)') MTFA(1,1), MTFA(1,2), 0.         , 0.
+   WRITE (UNSU,'(4ES14.6)') MTFA(2,1), MTFA(2,2), 0.         , 0.
+   WRITE (UNSU,'(4ES14.6)') 0.       , 0.       , MTSS(1,1), MTSS(1,2)
+   WRITE (UNSU,'(4ES14.6)') 0.       , 0.       , MTSS(2,1), MTSS(2,2)
    WRITE (UNSU,'(A)'     ) 'Tower generalized stiffness matrix (without stiffening):'
-   WRITE (UNSU,'(4ES14.6)') p%KTFA(1,1), p%KTFA(1,2), 0          , 0
-   WRITE (UNSU,'(4ES14.6)') p%KTFA(2,1), p%KTFA(2,2), 0          , 0
-   WRITE (UNSU,'(4ES14.6)') 0          , 0          , p%KTSS(1,1), p%KTSS(1,2)
-   WRITE (UNSU,'(4ES14.6)') 0          , 0          , p%KTSS(2,1), p%KTSS(2,2)
+   WRITE (UNSU,'(4ES14.6)') p%KTFA(1,1), p%KTFA(1,2), 0.          , 0.
+   WRITE (UNSU,'(4ES14.6)') p%KTFA(2,1), p%KTFA(2,2), 0.          , 0.
+   WRITE (UNSU,'(4ES14.6)') 0.          , 0.          , p%KTSS(1,1), p%KTSS(1,2)
+   WRITE (UNSU,'(4ES14.6)') 0.          , 0.          , p%KTSS(2,1), p%KTSS(2,2)
    WRITE (UNSU,'(A)'     ) 'Tower generalized stiffness matrix (with stiffening):'
-   WRITE (UNSU,'(4ES14.6)') p%KTFA(1,1)+KTFAGrav(1,1), p%KTFA(1,2)              , 0           , 0
-   WRITE (UNSU,'(4ES14.6)') p%KTFA(2,1)              , p%KTFA(2,2)+KTFAGrav(2,2), 0          , 0
-   WRITE (UNSU,'(4ES14.6)') 0                        , 0                        , p%KTSS(1,1)+KTSSGrav(1,1), p%KTSS(1,2)
-   WRITE (UNSU,'(4ES14.6)') 0                        , 0                        , p%KTSS(2,1), p%KTSS(2,2)+KTSSGrav(2,2)
+   WRITE (UNSU,'(4ES14.6)') p%KTFA(1,1)+KTFAGrav(1,1), p%KTFA(1,2)              , 0.           , 0.
+   WRITE (UNSU,'(4ES14.6)') p%KTFA(2,1)              , p%KTFA(2,2)+KTFAGrav(2,2), 0.          , 0.
+   WRITE (UNSU,'(4ES14.6)') 0.                        , 0.                        , p%KTSS(1,1)+KTSSGrav(1,1), p%KTSS(1,2)
+   WRITE (UNSU,'(4ES14.6)') 0.                        , 0.                        , p%KTSS(2,1), p%KTSS(2,2)+KTSSGrav(2,2)
    WRITE (UnSu,'(A)'     ) 'Tower generalized damping matrix:'
-   WRITE (UnSu,'(4ES14.6)') p%CTFA(1,1), p%CTFA(1,2), 0          , 0
-   WRITE (UnSu,'(4ES14.6)') p%CTFA(2,1), p%CTFA(2,2), 0          , 0
-   WRITE (UnSu,'(4ES14.6)') 0          , 0          , p%CTSS(1,1), p%CTSS(1,2)
-   WRITE (UnSu,'(4ES14.6)') 0          , 0          , p%CTSS(2,1), p%CTSS(2,2)
+   WRITE (UnSu,'(4ES14.6)') p%CTFA(1,1), p%CTFA(1,2), 0.          , 0.
+   WRITE (UnSu,'(4ES14.6)') p%CTFA(2,1), p%CTFA(2,2), 0.          , 0.
+   WRITE (UnSu,'(4ES14.6)') 0.          , 0.          , p%CTSS(1,1), p%CTSS(1,2)
+   WRITE (UnSu,'(4ES14.6)') 0.          , 0.          , p%CTSS(2,1), p%CTSS(2,2)
 
    ! --- Blades
    DO K = 1,p%NumBl ! Loop through all blades
@@ -10290,17 +10293,17 @@ END IF
          MBE(1,1) = MBE(1,1) + p%BElmntMass(J,K)*Shape1 *Shape1
       ENDDO
       WRITE (UnSu,'(A)'     ) 'Blade generalized mass matrix, Blade '//trim(num2lstr(K))//':'
-      WRITE (UnSu,'(3ES14.6)') MBF(1,1), MBF(1,2), 0
-      WRITE (UnSu,'(3ES14.6)') MBF(2,1), MBF(2,2), 0
-      WRITE (UnSu,'(3ES14.6)')    0    ,      0, MBE(1,1)
+      WRITE (UnSu,'(3ES14.6)') MBF(1,1), MBF(1,2), 0.
+      WRITE (UnSu,'(3ES14.6)') MBF(2,1), MBF(2,2), 0.
+      WRITE (UnSu,'(3ES14.6)')    0.    ,      0., MBE(1,1)
       WRITE (UnSu,'(A)'     ) 'Blade generalized stiffness matrix, Blade '//trim(num2lstr(K))//':'
-      WRITE (UnSu,'(3ES14.6)') p%KBF(K,1,1), p%KBF(K,1,2), 0
-      WRITE (UnSu,'(3ES14.6)') p%KBF(K,2,1), p%KBF(K,2,2), 0
-      WRITE (UnSu,'(3ES14.6)')      0      ,      0      , p%KBE(K,1,1)
+      WRITE (UnSu,'(3ES14.6)') p%KBF(K,1,1), p%KBF(K,1,2), 0.
+      WRITE (UnSu,'(3ES14.6)') p%KBF(K,2,1), p%KBF(K,2,2), 0.
+      WRITE (UnSu,'(3ES14.6)')      0.      ,      0.      , p%KBE(K,1,1)
       WRITE (UnSu,'(A)'     ) 'Blade generalized damping matrix, Blade '//trim(num2lstr(K))//':'
-      WRITE (UnSu,'(3ES14.6)') p%CBF(K,1,1), p%CBF(K,1,2), 0
-      WRITE (UnSu,'(3ES14.6)') p%CBF(K,2,1), p%CBF(K,2,2), 0
-      WRITE (UnSu,'(3ES14.6)')      0      ,      0      , p%CBE(K,1,1)
+      WRITE (UnSu,'(3ES14.6)') p%CBF(K,1,1), p%CBF(K,1,2), 0.
+      WRITE (UnSu,'(3ES14.6)') p%CBF(K,2,1), p%CBF(K,2,2), 0.
+      WRITE (UnSu,'(3ES14.6)')      0.      ,      0.      , p%CBE(K,1,1)
    ENDDO
 
 
