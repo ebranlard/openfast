@@ -2556,11 +2556,22 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
       m%BEMT_u(indx)%chi0 = 0.0_ReKi
    else
          ! make sure we don't have numerical issues that make the ratio outside +/-1
-      tmp_sz_y = min(  1.0_ReKi, m%V_dot_x / denom )
-      tmp_sz_y = max( -1.0_ReKi, tmp_sz_y )
+      numer = m%V_dot_x
+      ratio = numer / denom
+      m%BEMT_u(indx)%chi0 = acos( max( min( ratio, 1.0_ReKi ), -1.0_ReKi ) )
       
-      m%BEMT_u(indx)%chi0 = acos( tmp_sz_y )
-      
+      SkewVec = cross_product( m%V_diskAvg, x_hat_disk )
+      ! NOTE: chi0 is used only as cos(chi0), tan(chi0)**2, or abs(chi0), so the sign calculated here is only for output purposes
+      ! Depending on yaw and/or tilt, z and/or y component of the cross product above will dicatate the sign of chi0.
+      ! Pending Test: What happens when y or z are of similar magnitude
+      if (abs(SkewVec(2))>abs(SkewVec(3))) then
+        signofAngle = sign(1.0_ReKi,SkewVec(2))
+      else
+        signofAngle = sign(1.0_ReKi,SkewVec(3))
+      endif
+
+      !m%BEMT_u(indx)%chi0 = sign( m%BEMT_u(indx)%chi0, signOfAngle )
+
    end if
    
    ! "Azimuth angle" rad
