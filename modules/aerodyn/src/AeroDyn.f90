@@ -2514,14 +2514,14 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
    if (ErrStat >= AbortErrLev) return
 
    ! Velocity in disk normal
-   m%BEMT_u(indx)%V0 = m%AvgDiskVel
+   m%BEMT_u(indx)%V0 = m%AvgDiskVelDist    ! Note: used for SkewWake Cont
    m%BEMT_u(indx)%x_hat_disk = x_hat_disk
    if (p%AeroProjMod==APM_BEM_NoSweepPitchTwist .or. p%AeroProjMod==APM_LiftingLine) then
-      ! NOTE: OpenFAST: Contains translational velocity!!!  m%V_dot_x  = dot_product( m%V_diskAvg, x_hat_disk )
-      !                 Contains disturbed wind 
-      m%BEMT_u(indx)%Un_disk  = dot_product( m%V_diskAvg, x_hat_disk )
+      ! NOTE: m%V_diskAvg contains translational velocity and disturbed wind
+      m%BEMT_u(indx)%Un_disk  = dot_product( m%V_diskAvg, x_hat_disk )  ! NOTE: used for DBEMT only
    elseif (p%AeroProjMod==APM_BEM_Polar) then     
-      m%BEMT_u(indx)%Un_disk  = dot_product( m%AvgDiskVel, x_hat_disk )
+      ! NOTE: m%AvgDiskVel contains undisturbed wind only
+      m%BEMT_u(indx)%Un_disk  = dot_product( m%AvgDiskVel, x_hat_disk ) ! NOTE: used for DBEMT only
    endif
 
    ! Calculate Yaw and Tilt for use in xVelCorr
@@ -2764,7 +2764,7 @@ subroutine DiskAvgValues(p, u, m, x_hat_disk, y_hat_disk, z_hat_disk, Azimuth)
    V_elast_diskAvg = V_elast_diskAvg / real( p%NumBlades * p%NumBlNds, ReKi )
 
       ! calculate disk-averaged relative wind speed, V_DiskAvg
-   m%V_diskAvg = m%AvgDiskVelDist - V_elast_diskAvg
+   m%V_diskAvg = m%AvgDiskVelDist - V_elast_diskAvg 
    
    
       ! orientation vectors:
