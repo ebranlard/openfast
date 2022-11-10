@@ -2518,6 +2518,7 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
    m%BEMT_u(indx)%x_hat_disk = x_hat_disk
    if (p%AeroProjMod==APM_BEM_NoSweepPitchTwist .or. p%AeroProjMod==APM_LiftingLine) then
       ! NOTE: OpenFAST: Contains translational velocity!!!  m%V_dot_x  = dot_product( m%V_diskAvg, x_hat_disk )
+      !                 Contains disturbed wind 
       m%BEMT_u(indx)%Un_disk  = dot_product( m%V_diskAvg, x_hat_disk )
    elseif (p%AeroProjMod==APM_BEM_Polar) then     
       m%BEMT_u(indx)%Un_disk  = dot_product( m%AvgDiskVel, x_hat_disk )
@@ -2736,38 +2737,38 @@ subroutine DiskAvgValues(p, u, m, x_hat_disk, y_hat_disk, z_hat_disk, Azimuth)
    real(R8Ki), optional,    intent(  out)  :: Azimuth(p%NumBlades)
    real(ReKi)                              :: z_hat(3)
    real(ReKi)                              :: tmp(3)
+   real(ReKi)                              :: V_elast_diskAvg(3)
    real(ReKi)                              :: tmp_sz, tmp_sz_y
    integer(intKi)                          :: j                      ! loop counter for nodes
    integer(intKi)                          :: k                      ! loop counter for blades
 
-   ! calculate disk-averaged undisturbed wind
+   ! calculate disk-averaged velocities
    m%AvgDiskVel = 0.0_ReKi
+   m%AvgDiskVelDist = 0.0_ReKi ! TODO potentially get rid of me in the future
    do k=1,p%NumBlades
       do j=1,p%NumBlNds
-         m%AvgDiskVel = m%AvgDiskVel + m%DisturbedInflow(:,j,k)
+         m%AvgDiskVelDist = m%AvgDiskVelDist + m%DisturbedInflow(:,j,k)
+         m%AvgDiskVel = m%AvgDiskVel + u%InflowOnBlade(:,j,k)
       end do
    end do
+   m%AvgDiskVelDist = m%AvgDiskVelDist / real( p%NumBlades * p%NumBlNds, ReKi )
    m%AvgDiskVel = m%AvgDiskVel / real( p%NumBlades * p%NumBlNds, ReKi )
 
-      ! calculate disk-averaged relative wind speed, V_DiskAvg
-   m%V_diskAvg = 0.0_ReKi
+      ! calculate disk-averaged elastic velocity
+   V_elast_diskAvg = 0.0_ReKi
    do k=1,p%NumBlades
       do j=1,p%NumBlNds
-   !      !tmp = m%DisturbedInflow(:,j,k) - u%BladeMotion(k)%TranslationVel(:,j)
-   !      !tmp = u%InflowOnBlade(:,j,k) - u%BladeMotion(k)%TranslationVel(:,j)
-   !      !m%V_diskAvg = m%V_diskAvg + tmp
-         m%V_diskAvg = m%V_diskAvg + u%BladeMotion(k)%TranslationVel(:,j)
+         V_elast_diskAvg = V_elast_diskAvg + u%BladeMotion(k)%TranslationVel(:,j)
       end do
    end do
-   m%V_diskAvg = m%V_diskAvg / real( p%NumBlades * p%NumBlNds, ReKi )
+   V_elast_diskAvg = V_elast_diskAvg / real( p%NumBlades * p%NumBlNds, ReKi )
 
-   m%V_diskAvg = m%AvgDiskVel - m%V_diskAvg   
+      ! calculate disk-averaged relative wind speed, V_DiskAvg
+   m%V_diskAvg = m%AvgDiskVelDist - V_elast_diskAvg
    
    
       ! orientation vectors:
    x_hat_disk = u%HubMotion%Orientation(1,:,1) !actually also x_hat_hub
-!  x_hat_disk = x_hat_disk / TwoNorm( x_hat_disk )  ! not necessary since Orientation(1,:,1) is already unit length
-   
 
    m%V_dot_x  = dot_product( m%V_diskAvg, x_hat_disk )
    
@@ -3158,11 +3159,18 @@ subroutine SetOutputsFromBEMT( p, u, m, y )
          m%My(j,k) = moment(2)
          m%Mz(j,k) = moment(3)            
          
+         
+         if (p%BEMT%BEM_Mod==BEMMod_2D) then
             ! note: because force and moment are 1-d arrays, I'm calculating the transpose of the force and moment outputs
             !       so that I don't have to take the transpose of orientationAnnulus(:,:,j,k)
-         y%BladeLoad(k)%Force(:,j)  = matmul( force,  m%orientationAnnulus(:,:,j,k) )  ! force per unit length of the jth node in the kth blade
-         y%BladeLoad(k)%Moment(:,j) = matmul( moment, m%orientationAnnulus(:,:,j,k) )  ! moment per unit length of the jth node in the kth blade
+            y%BladeLoad(k)%Force(:,j)  = matmul( force,  m%orientationAnnulus(:,:,j,k) )  ! force per unit length of the jth node in the kth blade
+            y%BladeLoad(k)%Moment(:,j) = matmul( moment, m%orientationAnnulus(:,:,j,k) )  ! moment per unit length of the jth node in the kth blade
          
+         else
+	        ! Transfer loads from the airfoil frame to the blade frame
+	        y%BladeLoad(k)%Force(:,j)  = matmul( forceAirfoil,  u%BladeMotion(k)%Orientation(:,:,j) )  ! force per unit length of the jth node in the kth blade 
+	        y%BladeLoad(k)%Moment(:,j) = matmul( momentAirfoil, u%BladeMotion(k)%Orientation(:,:,j) )  ! moment per unit length of the jth node in the kth blade 
+	     endif
       end do !j=nodes
    end do !k=blades
    

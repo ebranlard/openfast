@@ -302,7 +302,8 @@ typedef	^	RotMiscVarType	MeshType	TwrBuoyLoadPoint	-	-	-	"point mesh for lumped 
 typedef	^	RotMiscVarType	MeshType	TwrBuoyLoad	-	-	-	"line mesh for per unit length buoyant tower loads"	-
 typedef	^	RotMiscVarType	MeshMapType	T_P_2_T_L	-	-	-	"mapping data structure to map buoyant tower point loads (m%TwrBuoyLoadPoint) to buoyant tower line loads (m%TwrBuoyLoad)"
 typedef	^	RotMiscVarType	Logical	FirstWarn_TowerStrike	-	-	-	"flag to avoid printing tower strike multiple times" -
-typedef	^	RotMiscVarType	ReKi	AvgDiskVel	{3}	-	-	"disk-averaged U,V,W"	m/s
+typedef	^	RotMiscVarType	ReKi	AvgDiskVel	{3}	-	-	"disk-averaged U,V,W (undisturbed)"	m/s
+typedef	^	RotMiscVarType	ReKi	AvgDiskVelDist	{3}	-	-	"disk-averaged U,V,W (disturbed)"	m/s
 # TailFin
 typedef	^	RotMiscVarType	ReKi	TFinAlpha	-	-	-	"Angle of attack for tailfin"
 typedef	^	RotMiscVarType	ReKi	TFinRe   	-	-	-	"Reynolds number for tailfin"

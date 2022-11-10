@@ -342,7 +342,8 @@ IMPLICIT NONE
     TYPE(MeshType)  :: TwrBuoyLoad      !< line mesh for per unit length buoyant tower loads [-]
     TYPE(MeshMapType)  :: T_P_2_T_L      !< mapping data structure to map buoyant tower point loads (m%TwrBuoyLoadPoint) to buoyant tower line loads (m%TwrBuoyLoad) [-]
     LOGICAL  :: FirstWarn_TowerStrike      !< flag to avoid printing tower strike multiple times [-]
-    REAL(ReKi) , DIMENSION(1:3)  :: AvgDiskVel      !< disk-averaged U,V,W [m/s]
+    REAL(ReKi) , DIMENSION(1:3)  :: AvgDiskVel      !< disk-averaged U,V,W (undisturbed) [m/s]
+    REAL(ReKi) , DIMENSION(1:3)  :: AvgDiskVelDist      !< disk-averaged U,V,W (disturbed) [m/s]
     REAL(ReKi)  :: TFinAlpha      !< Angle of attack for tailfin [-]
     REAL(ReKi)  :: TFinRe      !< Reynolds number for tailfin [-]
     REAL(ReKi)  :: TFinVrel      !< Orthogonal relative velocity nrom at the reference point [-]
@@ -9330,6 +9331,7 @@ ENDIF
          IF (ErrStat>=AbortErrLev) RETURN
     DstRotMiscVarTypeData%FirstWarn_TowerStrike = SrcRotMiscVarTypeData%FirstWarn_TowerStrike
     DstRotMiscVarTypeData%AvgDiskVel = SrcRotMiscVarTypeData%AvgDiskVel
+    DstRotMiscVarTypeData%AvgDiskVelDist = SrcRotMiscVarTypeData%AvgDiskVelDist
     DstRotMiscVarTypeData%TFinAlpha = SrcRotMiscVarTypeData%TFinAlpha
     DstRotMiscVarTypeData%TFinRe = SrcRotMiscVarTypeData%TFinRe
     DstRotMiscVarTypeData%TFinVrel = SrcRotMiscVarTypeData%TFinVrel
@@ -9996,6 +9998,7 @@ ENDIF
       END IF
       Int_BufSz  = Int_BufSz  + 1  ! FirstWarn_TowerStrike
       Re_BufSz   = Re_BufSz   + SIZE(InData%AvgDiskVel)  ! AvgDiskVel
+      Re_BufSz   = Re_BufSz   + SIZE(InData%AvgDiskVelDist)  ! AvgDiskVelDist
       Re_BufSz   = Re_BufSz   + 1  ! TFinAlpha
       Re_BufSz   = Re_BufSz   + 1  ! TFinRe
       Re_BufSz   = Re_BufSz   + 1  ! TFinVrel
@@ -11094,6 +11097,10 @@ ENDIF
     Int_Xferred = Int_Xferred + 1
     DO i1 = LBOUND(InData%AvgDiskVel,1), UBOUND(InData%AvgDiskVel,1)
       ReKiBuf(Re_Xferred) = InData%AvgDiskVel(i1)
+      Re_Xferred = Re_Xferred + 1
+    END DO
+    DO i1 = LBOUND(InData%AvgDiskVelDist,1), UBOUND(InData%AvgDiskVelDist,1)
+      ReKiBuf(Re_Xferred) = InData%AvgDiskVelDist(i1)
       Re_Xferred = Re_Xferred + 1
     END DO
     ReKiBuf(Re_Xferred) = InData%TFinAlpha
@@ -12517,6 +12524,12 @@ ENDIF
     i1_u = UBOUND(OutData%AvgDiskVel,1)
     DO i1 = LBOUND(OutData%AvgDiskVel,1), UBOUND(OutData%AvgDiskVel,1)
       OutData%AvgDiskVel(i1) = ReKiBuf(Re_Xferred)
+      Re_Xferred = Re_Xferred + 1
+    END DO
+    i1_l = LBOUND(OutData%AvgDiskVelDist,1)
+    i1_u = UBOUND(OutData%AvgDiskVelDist,1)
+    DO i1 = LBOUND(OutData%AvgDiskVelDist,1), UBOUND(OutData%AvgDiskVelDist,1)
+      OutData%AvgDiskVelDist(i1) = ReKiBuf(Re_Xferred)
       Re_Xferred = Re_Xferred + 1
     END DO
     OutData%TFinAlpha = ReKiBuf(Re_Xferred)
