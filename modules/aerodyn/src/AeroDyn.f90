@@ -2960,7 +2960,6 @@ subroutine GeomWithoutSweepPitchTwist(p,u,x_hat_disk,m,thetaBladeNds,toeBladeNds
       !.........................
       
       do k=1,p%NumBlades
-         call Calculate_MeshOrientation_Rel2Hub(u%BladeMotion(k), u%HubMotion, x_hat_disk, m%orientationAnnulus(:,:,:,k))
 
          ! NOTE: important for AeroProjMod=APM_LiftingLine we use BladeMotion Orientation directly for annulus
          ! otherwise ad_EllipticalWingInf_OLAF fails. Might need double checking...
