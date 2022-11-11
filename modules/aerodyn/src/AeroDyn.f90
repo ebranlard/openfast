@@ -2570,15 +2570,15 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
         signofAngle = sign(1.0_ReKi,SkewVec(3))
       endif
 
-      !m%BEMT_u(indx)%chi0 = sign( m%BEMT_u(indx)%chi0, signOfAngle )
+      m%BEMT_u(indx)%chi0 = sign( m%BEMT_u(indx)%chi0, signOfAngle )
 
    end if
    
-   ! "Azimuth angle" rad
-   m%bemt_u(indx)%psi = Azimuth
-
    ! Local radius (and orientation)
    if (p%AeroProjMod==APM_BEM_NoSweepPitchTwist .or. p%AeroProjMod==APM_LiftingLine) then
+
+      ! "Azimuth angle" rad
+      m%bemt_u(indx)%psi = Azimuth
 
       ! "Radial distance from center-of-rotation to node" m
       do k=1,p%NumBlades
