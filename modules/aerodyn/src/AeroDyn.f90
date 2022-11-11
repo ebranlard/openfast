@@ -2570,7 +2570,7 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
         signofAngle = sign(1.0_ReKi,SkewVec(3))
       endif
 
-      m%BEMT_u(indx)%chi0 = sign( m%BEMT_u(indx)%chi0, signOfAngle )
+      !m%BEMT_u(indx)%chi0 = sign( m%BEMT_u(indx)%chi0, signOfAngle )
 
    end if
    
