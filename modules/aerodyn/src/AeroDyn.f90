@@ -2498,11 +2498,13 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
       ! Get disk average values and orientations
    call DiskAvgValues(p, u, m, x_hat_disk, y_hat_disk, z_hat_disk, Azimuth) ! also sets m%V_diskAvg, m%V_dot_x
 
+   ! Compute orientationAnnulus, Curve, and local Pitch+twist (for some methods only...)
    if (p%AeroProjMod==APM_BEM_NoSweepPitchTwist) then
       call GeomWithoutSweepPitchTwist(p,u,x_hat_disk,m,ErrStat=ErrStat,ErrMsg=ErrMsg,thetaBladeNds=thetaBladeNds)
    elseif (p%AeroProjMod==APM_LiftingLine) then
       ! TODO we might want to do something different here
       call GeomWithoutSweepPitchTwist(p,u,x_hat_disk,m,ErrStat=ErrStat,ErrMsg=ErrMsg,thetaBladeNds=thetaBladeNds)
+      STOP
    elseif (p%AeroProjMod==APM_BEM_Polar) then 
        !pass
        !call GeomWithoutSweepPitchTwist(p,u, x_hat_disk, m, ErrStat=ErrStat,ErrMsg=ErrMsg, thetaBladeNds=m%BEMT_u(indx)%theta, toeBladeNds=m%BEMT_u(indx)%toeAngle) ! sets m%orientationAnnulus, m%Curve, m%hub_theta_x_root, m%AllOuts( BPitch(  k) )
@@ -2577,19 +2579,14 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
    ! Local radius (and orientation)
    if (p%AeroProjMod==APM_BEM_NoSweepPitchTwist .or. p%AeroProjMod==APM_LiftingLine) then
 
-      ! "Azimuth angle" rad
+      ! "Skew azimuth angle" rad
       m%bemt_u(indx)%psi = Azimuth
 
-      ! "Radial distance from center-of-rotation to node" m
+      ! local radius (normalized distance from rotor centerline)
       do k=1,p%NumBlades
          do j=1,p%NumBlNds    
-            ! displaced position of the jth node in the kth blade relative to the hub:
-            tmp =  u%BladeMotion(k)%Position(:,j) + u%BladeMotion(k)%TranslationDisp(:,j) &
-                 - u%HubMotion%Position(:,1)      - u%HubMotion%TranslationDisp(:,1)       
-            ! local radius (normalized distance from rotor centerline)
-            tmp_sz_y = dot_product( tmp, y_hat_disk )**2
-            tmp_sz   = dot_product( tmp, z_hat_disk )**2
-            m%BEMT_u(indx)%rLocal(j,k) = sqrt( tmp_sz + tmp_sz_y )      
+            call Calculate_MeshOrientation_Rel2Hub(u%BladeMotion(k), u%HubMotion, x_hat_disk, elemPosRelToHub_save=elemPosRelToHub, elemPosRotorProj_save=elemPosRotorProj)
+            m%BEMT_u(indx)%rLocal(j,k) = TwoNorm( elemPosRotorProj(:,j) )
          end do !j=nodes      
       end do !k=blades  
       
@@ -2600,6 +2597,7 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
          call Calculate_MeshOrientation_Rel2Hub(u%BladeRootMotion(k), u%HubMotion, x_hat_disk, orientationBladeAzimuth)
          
          ! Extract azimuth angle for blade k
+         ! NOTE: EB, this might need improvements (express wrt hub, also deal with case hubRad=0). This is likely not psi_skew. 
          theta = -EulerExtract( transpose(orientationBladeAzimuth(:,:,1)) )
          m%BEMT_u(indx)%psi(k) = theta(1)
          
@@ -2891,25 +2889,26 @@ subroutine GeomWithoutSweepPitchTwist(p,u,x_hat_disk,m,thetaBladeNds,toeBladeNds
    ErrStat = ErrID_None
    ErrMsg  = ""
 
-   if (p%AeroProjMod==APM_BEM_NoSweepPitchTwist) then
-   
-         ! theta, "Twist angle (includes all sources of twist)" rad
-         ! Vx, "Local axial velocity at node" m/s
-         ! Vy, "Local tangential velocity at node" m/s
-      do k=1,p%NumBlades
-            ! construct system equivalent to u%BladeRootMotion(k)%Orientation, but without the blade-pitch angle:
-         ! orientation = rotation from hub 2 bl
-         call LAPACK_gemm( 'n', 't', 1.0_R8Ki, u%BladeRootMotion(k)%Orientation(:,:,1), u%HubMotion%Orientation(:,:,1), 0.0_R8Ki, orientation, errStat2, errMsg2)
-            call SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
-         theta = EulerExtract( orientation ) !hub_theta_root(k)
-         if (k<=3) then
-            m%AllOuts( BPitch(  k) ) = -theta(3)*R2D ! save this value of pitch for potential output
-         endif
-         theta(3) = 0.0_ReKi
-         if (k<=size(m%hub_theta_x_root)) then
-             m%hub_theta_x_root(k) = theta(1)   ! save this value for FAST.Farm
-         end if
 
+      ! theta, "Twist angle (includes all sources of twist)" rad
+   do k=1,p%NumBlades
+      ! orientation = rotation from hub 2 bl
+      call LAPACK_gemm( 'n', 't', 1.0_R8Ki, u%BladeRootMotion(k)%Orientation(:,:,1), u%HubMotion%Orientation(:,:,1), 0.0_R8Ki, orientation, errStat2, errMsg2)
+         call SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      theta = EulerExtract( orientation ) !hub_theta_root(k)
+      if (k<=3) then
+         m%AllOuts( BPitch(  k) ) = -theta(3)*R2D ! save this value of pitch for potential output
+      endif
+      theta(3) = 0.0_ReKi
+      if (k<=size(m%hub_theta_x_root)) then
+          m%hub_theta_x_root(k) = theta(1)   ! save this value for FAST.Farm
+      end if
+
+      !.........................
+      ! Set orientation Annulus, curve and possibly thetaBladeNds:
+      !.........................
+      if (p%AeroProjMod==APM_BEM_NoSweepPitchTwist) then
+         ! construct system equivalent to u%BladeRootMotion(k)%Orientation, but without the blade-pitch angle:
          orientation = EulerConstruct( theta ) ! rotation from hub 2 non-pitched blade
          orientation_nopitch = matmul( orientation, u%HubMotion%Orientation(:,:,1) ) ! withoutPitch_theta_Root(k) ! rotation from global 2 non-pitched blade
 
@@ -2933,58 +2932,27 @@ subroutine GeomWithoutSweepPitchTwist(p,u,x_hat_disk,m,thetaBladeNds,toeBladeNds
             m%orientationAnnulus(:,:,j,k) = matmul( EulerConstruct( theta ), orientation_nopitch ) ! WithoutSweepPitch+Twist_theta(j)_Blade(k)
 
          end do !j=nodes
-      end do !k=blades
       
-   else if (p%AeroProjMod==APM_LiftingLine) then
+      else if (p%AeroProjMod==APM_LiftingLine) then
    
-      do k=1,p%NumBlades
-        ! construct system equivalent to u%BladeRootMotion(k)%Orientation, but without the blade-pitch angle:
-        !orientation = matmul( u%BladeRootMotion(k)%Orientation(:,:,1), transpose( u%HubMotion%Orientation(:,:,1) ) ) : equivalent, without taking the transpose:
-         call LAPACK_gemm( 'n', 't', 1.0_R8Ki, u%BladeRootMotion(k)%Orientation(:,:,1), u%HubMotion%Orientation(:,:,1), 0.0_R8Ki, orientation, errStat2, errMsg2)
-            call SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
-         theta = EulerExtract( orientation ) !hub_theta_root(k)
-       ! theta(1) = Azimuth, theta(2) = cant+precone+rotorTilt, theta(3) = pitch+twist
-         
-         if (k<=size(BPitch)) then
-            m%AllOuts( BPitch(  k) ) = -theta(3)*R2D ! save this value of pitch for potential output
-         endif
-
-         if (k<=size(m%hub_theta_x_root)) then
-            m%hub_theta_x_root(k) = theta(1)   ! save this value for FAST.Farm
-         end if
-      end do
-      
-            
-      !.........................
-      ! Set orientation Annulus:
-      !.........................
-      
-      do k=1,p%NumBlades
-
-         ! NOTE: important for AeroProjMod=APM_LiftingLine we use BladeMotion Orientation directly for annulus
-         ! otherwise ad_EllipticalWingInf_OLAF fails. Might need double checking...
+         ! NOTE: for AeroProjMod=APM_LiftingLine we use BladeMotion Orientation directly for annulus
          do j=1,p%NumBlNds
             m%orientationAnnulus(:,:,j,k) = u%BladeMotion(k)%Orientation(:,:,j)
          enddo
-      enddo
       
-      !.........................
-      ! Set Curve and possibly thetaBladeNds:
-      !.........................
-      do k=1,p%NumBlades
          do j=1,p%NumBlNds
             orientation = matmul( u%BladeMotion(k)%Orientation(:,:,j), transpose( m%orientationAnnulus(:,:,j,k) ) )
             theta = EulerExtract( orientation )
-            m%Curve(      j,k) =  theta(2)
+            m%Curve(      j,k) =  theta(2) ! TODO
             if (present(thetaBladeNds)) thetaBladeNds(j,k) = -theta(3)
             if (present(toeBladeNds  )) toeBladeNds(  j,k) =  theta(1)
          enddo
-      enddo
+      else
+         ErrStat = ErrID_Fatal
+         ErrMsg ='GeomWithoutSweepPitchTwist: AeroProjMod not supported '//trim(num2lstr(p%AeroProjMod))
+      endif
+   end do !k=blades
       
-   else
-      ErrStat = ErrID_Fatal
-      ErrMsg ='GeomWithoutSweepPitchTwist: AeroProjMod not supported '//trim(num2lstr(p%AeroProjMod))
-   endif
 end subroutine GeomWithoutSweepPitchTwist
 !----------------------------------------------------------------------------------------------------------------------------------
 !> This subroutine sets m%FVW_u(indx).
