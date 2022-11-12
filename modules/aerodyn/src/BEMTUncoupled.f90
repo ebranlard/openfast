@@ -557,35 +557,36 @@ subroutine inductionFactors0(B, r, chord, phi, cn, ct, Vx, Vy, F, wakerotation, 
    !.....................................................
     
    if (wakerotation) then 
+      call getTangentialInduction(a, cphi, sphi, Vx, F, 1.0_R8Ki, sigma_p, ct, Vx, 0.0_R8Ki, 1.0_R8Ki, .False., ap, kp)
    
-         ! compute tangential induction factor
-      if ( EqualRealNos(cphi,0.0_ReKi) ) then
-         
-         ap = -1.0_ReKi
-         kp =  sign(InductionLimit, ct*sphi)*sign(1.0_ReKi,Vx)
-         
-      else
-         
-         kp = sigma_p*ct/4.0_ReKi/F/sphi/cphi
-         if (Vx < 0.0_ReKi) then 
-            kp = -kp
-         end if
-         
-      
-         if ( EqualRealNos(kp,1.0_ReKi) ) then
-            ap = sign(InductionLimit, 1.0_ReKi-kp)
-         else
-            ap = kp/(1.0_ReKi-kp)
-         end if
-
-      endif
-            
+!          ! compute tangential induction factor
+!       if ( EqualRealNos(cphi,0.0_ReKi) ) then
+!          
+!          ap = -1.0_ReKi
+!          kp =  sign(InductionLimit, ct*sphi)*sign(1.0_ReKi,Vx)
+!          
+!       else
+!          
+!          kp = sigma_p*ct/4.0_ReKi/F/sphi/cphi
+!          if (Vx < 0.0_ReKi) then 
+!             kp = -kp
+!          end if
+!          
+!       
+!          if ( EqualRealNos(kp,1.0_ReKi) ) then
+!             ap = sign(InductionLimit, 1.0_ReKi-kp)
+!          else
+!             ap = kp/(1.0_ReKi-kp)
+!          end if
+! 
+!       endif
+!             
    else 
       
       ! we're not computing tangential induction:       
       ap = 0.0_ReKi
       kp = 0.0_ReKi
-      
+!       
    end if
 
     
@@ -606,6 +607,53 @@ subroutine inductionFactors0(B, r, chord, phi, cn, ct, Vx, Vy, F, wakerotation, 
    end if
 
 end subroutine inductionFactors0
+subroutine getTangentialInduction(a, cphi, sphi, Vx, F, kCorrectionFactor, sigma_p, ct, VxCorrected, effectiveYaw, H, MomentumCorr, ap, kp)
+   real(ReKi), intent(in) :: Vx             !< velocity component [u%Vx]
+   real(ReKi), intent(in) :: F              !< hub/tip loss correction factor
+   logical,    intent(in) :: MomentumCorr   !< Include tangential induction in BEMT calculations [flag] [p%useTanInd]
+   real(ReKi), intent(in) :: ct             !< tangential force coefficient (tangential to the plane, not chord) of the jth node in the kth blade; [y%cy]
+   real(R8Ki), intent(in) :: sigma_p           ! local solidity (B*chord/(TwoPi*r))
+   real(R8Ki), intent(in) :: sphi, cphi        ! sin(phi), cos(phi)
+   real(R8Ki), intent(in) :: VxCorrected, kCorrectionFactor
+   real(R8Ki), intent(in) :: effectiveYaw !
+   real(R8Ki), intent(in) :: H              ! scaling factor to gradually phase out tangential induction when axial induction is near 1.0
+   real(R8Ki), intent(in) :: a   ! double precision versions of output variables of similar name
+   real(R8Ki), intent(out) :: kp                ! non-dimensional parameters 
+   real(R8Ki), intent(out) :: ap   ! double precision versions of output variables of similar name
+   real(ReKi), parameter :: InductionLimit = 1000000.0_ReKi
+   !real(R8Ki), parameter :: InductionLimit = 1000000.0_R8Ki
+
+   ! compute tangential induction factor
+   if ( EqualRealNos(cphi,0.0_R8Ki) ) then
+      
+      ap = -1.0_R8Ki
+      kp =  sign(InductionLimit, ct*sphi)*sign(1.0_R8Ki,real(Vx,R8Ki))
+      
+   else
+      !H = smoothStep( real(a,ReKi), 0.8, 1.0, 1.0, 0.0 ) + smoothStep( real(a,ReKi), 1.0, 0.0, 1.2, 1.0 )
+      !kp = sigma_p*( cl*sphi - H*cd*cphi )/( 4.0*F*sphi*cphi )*kCorrectionFactor
+      if (MomentumCorr) then             
+          if (equalrealnos(a,1.0_R8Ki)) then
+              kp = 0.0_R8Ki !H*sigma_p*ct/( 4.0*F*sphi*cphi )*(kCorrectionFactor)
+          else
+              kp = H*sigma_p*ct/( 4.0*F*sphi*cphi )*(kCorrectionFactor)/sqrt(1+(tan(effectiveYaw)/(1.0_ReKi-a))**2)            
+          endif             
+      else
+          kp = H*sigma_p*ct/( 4.0*F*sphi*cphi )*kCorrectionFactor
+      endif
+      
+      if ( VxCorrected < 0.0_ReKi ) then
+         kp = -kp
+      endif
+   
+      if ( EqualRealNos(kp,1.0_R8Ki) ) then
+         ap = sign(InductionLimit, 1.0_R8Ki-kp)
+      else
+         ap = kp/(1.0_R8Ki-kp)
+      end if
+
+   endif
+end subroutine getTangentialInduction
 !-----------------------------------------------------------------------------------------
 !> This subroutine computes the induction factors (a) and (ap) along with the residual (fzero)
 subroutine inductionFactors2( B, r, chord, phi, cn, ct, Vx, Vy, drdz,cantAngle, F, CHI0, wakerotation, &
@@ -704,37 +752,38 @@ subroutine inductionFactors2( B, r, chord, phi, cn, ct, Vx, Vy, drdz,cantAngle, 
    ! compute tangential induction factor:
    !.....................................................
    if (wakerotation) then 
+      call getTangentialInduction(a, cphi, sphi, Vx, F, kCorrectionFactor, sigma_p, ct, VxCorrected, effectiveYaw, H, MomentumCorr, ap, kp)
    
-      ! compute tangential induction factor
-      if ( EqualRealNos(cphi,0.0_R8Ki) ) then
-         
-         ap = -1.0_R8Ki
-         kp =  sign(InductionLimit, ct*sphi)*sign(1.0_R8Ki,real(Vx,R8Ki))
-         
-      else
-         !H = smoothStep( real(a,ReKi), 0.8, 1.0, 1.0, 0.0 ) + smoothStep( real(a,ReKi), 1.0, 0.0, 1.2, 1.0 )
-         !kp = sigma_p*( cl*sphi - H*cd*cphi )/( 4.0*F*sphi*cphi )*kCorrectionFactor
-         if (MomentumCorr) then             
-             if (equalrealnos(a,1.0_R8Ki)) then
-                 kp = 0.0_R8Ki !H*sigma_p*ct/( 4.0*F*sphi*cphi )*(kCorrectionFactor)
-             else
-                 kp = H*sigma_p*ct/( 4.0*F*sphi*cphi )*(kCorrectionFactor)/sqrt(1+(tan(effectiveYaw)/(1.0_ReKi-a))**2)            
-             endif             
-         else
-             kp = H*sigma_p*ct/( 4.0*F*sphi*cphi )*kCorrectionFactor
-         endif
-         
-         if ( VxCorrected < 0.0_ReKi ) then
-            kp = -kp
-         endif
-      
-         if ( EqualRealNos(kp,1.0_R8Ki) ) then
-            ap = sign(InductionLimit, 1.0_R8Ki-kp)
-         else
-            ap = kp/(1.0_R8Ki-kp)
-         end if
-
-      endif
+!       ! compute tangential induction factor
+!       if ( EqualRealNos(cphi,0.0_R8Ki) ) then
+!          
+!          ap = -1.0_R8Ki
+!          kp =  sign(InductionLimit, ct*sphi)*sign(1.0_R8Ki,real(Vx,R8Ki))
+!          
+!       else
+!          !H = smoothStep( real(a,ReKi), 0.8, 1.0, 1.0, 0.0 ) + smoothStep( real(a,ReKi), 1.0, 0.0, 1.2, 1.0 )
+!          !kp = sigma_p*( cl*sphi - H*cd*cphi )/( 4.0*F*sphi*cphi )*kCorrectionFactor
+!          if (MomentumCorr) then             
+!              if (equalrealnos(a,1.0_R8Ki)) then
+!                  kp = 0.0_R8Ki !H*sigma_p*ct/( 4.0*F*sphi*cphi )*(kCorrectionFactor)
+!              else
+!                  kp = H*sigma_p*ct/( 4.0*F*sphi*cphi )*(kCorrectionFactor)/sqrt(1+(tan(effectiveYaw)/(1.0_ReKi-a))**2)            
+!              endif             
+!          else
+!              kp = H*sigma_p*ct/( 4.0*F*sphi*cphi )*kCorrectionFactor
+!          endif
+!          
+!          if ( VxCorrected < 0.0_ReKi ) then
+!             kp = -kp
+!          endif
+!       
+!          if ( EqualRealNos(kp,1.0_R8Ki) ) then
+!             ap = sign(InductionLimit, 1.0_R8Ki-kp)
+!          else
+!             ap = kp/(1.0_R8Ki-kp)
+!          end if
+! 
+!       endif
             
    else 
       
