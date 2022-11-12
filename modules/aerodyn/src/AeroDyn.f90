@@ -2483,9 +2483,9 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
    real(ReKi)                              :: numer, denom, ratio, signOfAngle ! helper variables for calculating u%chi0  
    real(ReKi)                              :: tilt, yaw
    real(ReKi)                              :: SkewVec(3), tmp_skewVec(3), x_hat_wind(3), tmpD(3), tmpW(3)
-!   real(R8Ki)                              :: windCrossDisk(3)
-!   real(R8Ki)                              :: windCrossDiskMag
-!   real(R8Ki)                              :: x_vec(3), y_vec(3), z_vec(3)
+   real(R8Ki)                              :: windCrossDisk(3)
+   real(R8Ki)                              :: windCrossDiskMag
+   real(R8Ki)                              :: x_vec(3), y_vec(3), z_vec(3)
    real(R8Ki)                              :: elemPosRelToHub(3,p%NUMBLNDS)
    real(R8Ki)                              :: elemPosRotorProj(3,p%NUMBLNDS)
    real(R8Ki)                              :: dr(3), dz(3)
@@ -2528,8 +2528,8 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
    tmpW = x_hat_wind
    tmpW(2) = 0.0
    tilt  = acos(max(-1.0_ReKi,min(1.0_ReKi,dot_product(tmpD,tmpW)/(twonorm(tmpD)*TwoNorm(tmpW))))) 
-   tmp_skewVec = cross_product(tmpD,tmpW)
-   tilt = sign(tilt,-tmp_skewVec(2))
+   tmp_skewVec = cross_product(tmpW,tmpD)
+   tilt = sign(tilt,tmp_skewVec(2))
    m%tilt = tilt
      
    ! "Angular velocity of rotor" rad/s
@@ -2575,6 +2575,24 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
          ! NOTE: EB, this might need improvements (express wrt hub, also deal with case hubRad=0). This is likely not psi_skew. 
          theta = -EulerExtract( transpose(orientationBladeAzimuth(:,:,1)) )
          m%BEMT_u(indx)%psi(k) = theta(1)
+         ! Find the most-downwind azimuth angle needed by the skewed wake correction model
+	     windCrossDisk = cross_product( x_hat_wind, x_hat_disk )
+	     windCrossDiskMag = TwoNorm( windCrossDisk )
+	     if (windCrossDiskMag <= 0.01_ReKi) then
+	         m%BEMT_u(indx)%psiSkewOffset = PiBy2
+	     else
+	        ! Assemble blade azimuth unit vectors and orientation matrix
+	        z_vec = windCrossDisk / windCrossDiskMag
+	        x_vec = x_hat_disk
+	        y_vec = cross_product( z_vec, x_vec )
+	        orientation(1,:) = x_vec
+	        orientation(2,:) = y_vec
+	        orientation(3,:) = z_vec
+	        ! Extract azimuth angle for most down-wind blade orientation
+	        theta = -EulerExtract( transpose(orientation) )
+	        m%BEMT_u(indx)%psiSkewOffset = theta(1)+PiBy2  ! cross-product of wind vector and rotor axis will lead downwind blade azimuth by 90 degrees
+	     end if
+         
       end do !k=blades
    else
       call WrScr('AeroProjMod not supported - should never happen')
