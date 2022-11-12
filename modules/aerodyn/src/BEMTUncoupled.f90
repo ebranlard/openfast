@@ -370,17 +370,20 @@ real(ReKi) function BEMTU_InductionWithResidual(p, u, i, j, phi, AFInfo, IsValid
                AOA, AFI_interp%Cl, AFI_interp%Cd, AFI_interp%Cm, Cx, Cy, Cz, dumX, dumY, dumZ )
       endif
       
+
+   
+      !.....................................................
+      ! Prandtl's tip and hub loss factor:
+      !.....................................................
+      ! Note: cantAngle is 0 for BEMMod_2D
+      F = getHubTipLossCorrection(p%BEM_Mod, p%useHubLoss, p%useTipLoss, p%hubLossConst(i,j), p%tipLossConst(i,j), phi, u%cantAngle(i,j) )
+      F = max(F,0.0001_ReKi)
       
          ! Determine axInduction, tanInduction for the current Cl, Cd, phi
       if(p%BEM_Mod==BEMMod_2D) then
-          call inductionFactors0( u%rlocal(i,j), p%chord(i,j), phi, Cx, Cy, p%numBlades, &
-                              u%Vx(i,j), u%Vy(i,j), p%useTanInd, p%useHubLoss, p%useTipLoss,  p%hubLossConst(i,j), p%tipLossConst(i,j), &
+          call inductionFactors0(p%numBlades, u%rlocal(i,j), p%chord(i,j), phi, Cx, Cy, u%Vx(i,j), u%Vy(i,j), F, p%useTanInd, &
                               ResidualVal, axInduction, tanInduction, IsValidSolution)
       else
-      ! Prandtl's tip and hub loss factor
-      ! TODO TODO TODO EB Unify with 2D, compute F for both before induction
-      F = getHubTipLossCorrection(p%BEM_Mod, p%useHubLoss, p%useTipLoss, p%hubLossConst(i,j), p%tipLossConst(i,j), phi, u%cantAngle(i,j) )
-      F = max(F,0.0001_ReKi)
           call inductionFactors2( p%numBlades, u%rlocal(i,j), p%chord(i,j), phi, Cx, Cy, u%Vx(i,j), u%Vy(i,j), u%drdz(i,j), u%cantAngle(i,j), F, u%CHI0, p%useTanInd, &
                               ResidualVal, axInduction, tanInduction, p%MomentumCorr, u%xVelCorr(i,j), IsValidSolution, k_out, kp_out )
 
@@ -441,24 +444,21 @@ subroutine ApplySkewedWakeCorrection( yawCorrFactor, azimuth, chi0, tipRatio, a,
 end subroutine ApplySkewedWakeCorrection
 !-----------------------------------------------------------------------------------------
 !> This subroutine computes the induction factors (a) and (ap) along with the residual (fzero)
-subroutine inductionFactors0(r, chord, phi, cn, ct, B, Vx, Vy, wakerotation, useHubLoss, useTipLoss, hubLossConst, tipLossConst, &
+subroutine inductionFactors0(B, r, chord, phi, cn, ct, Vx, Vy, F, wakerotation, &
                               fzero, a, ap, IsValidSolution)
 
    implicit none
 
    ! in
+   integer,    intent(in) :: B              !< number of blades [p%numBlades]
    real(ReKi), intent(in) :: r              !< local radial position [u%rlocal]
    real(ReKi), intent(in) :: chord          !< chord [p%chord]
    real(ReKi), intent(in) :: phi            !< angle between the plane of rotation and the direction of the local wind [y%phi]; must be in range [-pi,pi]
    real(ReKi), intent(in) :: cn             !< normal force coefficient (normal to the plane, not chord) of the jth node in the kth blade; [y%cx]
    real(ReKi), intent(in) :: ct             !< tangential force coefficient (tangential to the plane, not chord) of the jth node in the kth blade; [y%cy]
-   integer,    intent(in) :: B              !< number of blades [p%numBlades]
    real(ReKi), intent(in) :: Vx             !< velocity component [u%Vx]
    real(ReKi), intent(in) :: Vy             !< velocity component [u%Vy]
-   real(ReKi), intent(in) :: hubLossConst   !< hub loss constant [p%hubLossConst]
-   real(ReKi), intent(in) :: tipLossConst   !< tip loss constant [p%tipLossConst]
-   logical,    intent(in) :: useHubLoss     !< hub-loss flag [p%useHubLoss]
-   logical,    intent(in) :: useTipLoss     !< tip-loss flag [p%useTipLoss]
+   real(ReKi), intent(in) :: F              !< hub/tip loss correction factor
    logical,    intent(in) :: wakerotation   !< Include tangential induction in BEMT calculations [flag] [p%useTanInd]
                    
    ! out
@@ -472,7 +472,6 @@ subroutine inductionFactors0(r, chord, phi, cn, ct, B, Vx, Vy, wakerotation, use
    real(ReKi) :: sigma_p   ! local solidity (B*chord/(TwoPi*r))
    real(ReKi) :: sphi, cphi, lambda_r
    real(ReKi) :: k, kp ! non-dimensional parameters 
-   real(ReKi) :: F ! hub/tip loss correction factor
    real(ReKi) :: g1, g2, g3
    real(ReKi) :: temp  ! temporary variable so we don't have to calculate 2.0_ReKi*F*k multiple times
    real(ReKi), parameter :: InductionLimit = 1000000.0_ReKi
@@ -492,12 +491,6 @@ subroutine inductionFactors0(r, chord, phi, cn, ct, B, Vx, Vy, wakerotation, use
    sphi = sin(phi)
    cphi = cos(phi)
    
-   
-   !.....................................................
-   ! Prandtl's tip and hub loss factor:
-   !.....................................................
-   ! TODO TODO TODO EB Put this up like BEM_Mod3d
-   F = getHubTipLossCorrection(BEMMod_2D, useHubLoss, useTipLoss, hubLossConst, tipLossConst, phi, cantAngle=0.0_ReKi)
    
 
    !.....................................................
