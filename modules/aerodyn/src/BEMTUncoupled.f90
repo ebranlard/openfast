@@ -445,7 +445,7 @@ end subroutine ApplySkewedWakeCorrection
 !-----------------------------------------------------------------------------------------
 !> This subroutine computes the induction factors (a) and (ap) along with the residual (fzero)
 subroutine inductionFactors0(B, r, chord, phi, cn, ct, Vx, Vy, F, wakerotation, &
-                              fzero, a, ap, IsValidSolution)
+                              fzero, a_out, ap_out, IsValidSolution)
 
    implicit none
 
@@ -463,18 +463,20 @@ subroutine inductionFactors0(B, r, chord, phi, cn, ct, Vx, Vy, F, wakerotation, 
                    
    ! out
    real(ReKi), intent(out) :: fzero         !< residual of BEM equations
-   real(ReKi), intent(out) :: a             !< axial induction [y%axInduction]
-   real(ReKi), intent(out) :: ap            !< tangential induction, i.e., a-prime [y%tanInduction]
+   real(ReKi), intent(out) :: a_out         !< axial induction [y%axInduction]
+   real(ReKi), intent(out) :: ap_out        !< tangential induction, i.e., a-prime [y%tanInduction]
    logical,    intent(out) :: IsValidSolution !< this is set to false if k<=1 in the propeller brake region or k<-1 in the momentum region, indicating an invalid solution
    
    ! local
         
-   real(ReKi) :: sigma_p   ! local solidity (B*chord/(TwoPi*r))
-   real(ReKi) :: sphi, cphi, lambda_r
-   real(ReKi) :: k, kp ! non-dimensional parameters 
+   real(R8Ki) :: VxCorrected
+   real(R8Ki) :: sigma_p   ! local solidity (B*chord/(TwoPi*r))
+   real(R8Ki) :: sphi, cphi, lambda_r
+   real(R8Ki) :: k, kp ! non-dimensional parameters 
    real(ReKi) :: g1, g2, g3
    real(ReKi) :: temp  ! temporary variable so we don't have to calculate 2.0_ReKi*F*k multiple times
-   real(ReKi), parameter :: InductionLimit = 1000000.0_ReKi
+   real(R8Ki)            :: a, ap   ! double precision versions of output variables of similar name
+   real(R8Ki), parameter :: InductionLimit = 1000000.0_R8Ki
   
    logical    :: momentumRegion
 
@@ -507,13 +509,13 @@ subroutine inductionFactors0(B, r, chord, phi, cn, ct, Vx, Vy, F, wakerotation, 
         ! update axial induction factor
       if (k <= 2.0_ReKi/3.0_ReKi) then  ! momentum state for a < 0.4
          
-         if ( EqualRealNos(k,-1.0_ReKi) ) then
-            a = -sign(InductionLimit, 1.0_ReKi+k)
+         if ( EqualRealNos(k,-1.0_R8Ki) ) then
+            a = -sign(InductionLimit, 1.0_R8Ki+k)
          else   
-            a = k/(1.0_ReKi+k)
+            a = k/(1.0_R8Ki+k)
          end if
          
-         if (k<-1.0_ReKi) then ! k < -1 cannot be a solution in momentum region (this is equivalent to a>1.0)
+         if (k<-1.0_R8Ki) then ! k < -1 cannot be a solution in momentum region (this is equivalent to a>1.0)
             IsValidSolution = .false.
          end if
          
@@ -538,15 +540,15 @@ subroutine inductionFactors0(B, r, chord, phi, cn, ct, Vx, Vy, F, wakerotation, 
    else  ! propeller brake
       
             
-      if ( EqualRealNos(k,1.0_ReKi) ) then
+      if ( EqualRealNos(k,1.0_R8Ki) ) then
          IsValidSolution = .false.
          a = InductionLimit
       else
-         a = k/(k-1.0_ReKi)
+         a = k/(k-1.0_R8Ki)
       end if
 
       
-      if (k<=1.0_ReKi) then ! k <= 1 cannot be a solution in propeller brake region (this is equivalent to a<1.0)
+      if (k<=1.0_R8Ki) then ! k <= 1 cannot be a solution in propeller brake region (this is equivalent to a<1.0)
          IsValidSolution = .false.
       end if
       
@@ -557,7 +559,8 @@ subroutine inductionFactors0(B, r, chord, phi, cn, ct, Vx, Vy, F, wakerotation, 
    !.....................................................
     
    if (wakerotation) then 
-      call getTangentialInduction(a, cphi, sphi, Vx, F, 1.0_R8Ki, sigma_p, ct, Vx, 0.0_R8Ki, 1.0_R8Ki, .False., ap, kp)
+      VxCorrected = Vx
+      call getTangentialInduction(a, cphi, sphi, Vx, F, 1.0_R8Ki, sigma_p, ct, VxCorrected, 0.0_R8Ki, 1.0_R8Ki, .False., ap, kp)
    
 !          ! compute tangential induction factor
 !       if ( EqualRealNos(cphi,0.0_ReKi) ) then
@@ -584,8 +587,8 @@ subroutine inductionFactors0(B, r, chord, phi, cn, ct, Vx, Vy, F, wakerotation, 
    else 
       
       ! we're not computing tangential induction:       
-      ap = 0.0_ReKi
-      kp = 0.0_ReKi
+      ap = 0.0_R8Ki
+      kp = 0.0_R8Ki
 !       
    end if
 
@@ -596,7 +599,7 @@ subroutine inductionFactors0(B, r, chord, phi, cn, ct, Vx, Vy, F, wakerotation, 
    lambda_r = Vy/Vx
 
    if (momentumRegion) then  ! momentum/empirical
-      if ( EqualRealNos(a, 1.0_ReKi) ) then
+      if ( EqualRealNos(a, 1.0_R8Ki) ) then
          fzero = - cphi/lambda_r*(1-kp)
       else       
          fzero = sphi/(1-a) - cphi/lambda_r*(1-kp)
@@ -605,6 +608,11 @@ subroutine inductionFactors0(B, r, chord, phi, cn, ct, Vx, Vy, F, wakerotation, 
    else  ! propeller brake region
       fzero = sphi*(1-k) - cphi/lambda_r*(1-kp)
    end if
+
+
+   ! Convert from double to ReKi
+   a_out     = real(     a, ReKi )
+   ap_out    = real(    ap, ReKi )
 
 end subroutine inductionFactors0
 subroutine getTangentialInduction(a, cphi, sphi, Vx, F, kCorrectionFactor, sigma_p, ct, VxCorrected, effectiveYaw, H, MomentumCorr, ap, kp)
@@ -620,8 +628,7 @@ subroutine getTangentialInduction(a, cphi, sphi, Vx, F, kCorrectionFactor, sigma
    real(R8Ki), intent(in) :: a   ! double precision versions of output variables of similar name
    real(R8Ki), intent(out) :: kp                ! non-dimensional parameters 
    real(R8Ki), intent(out) :: ap   ! double precision versions of output variables of similar name
-   real(ReKi), parameter :: InductionLimit = 1000000.0_ReKi
-   !real(R8Ki), parameter :: InductionLimit = 1000000.0_R8Ki
+   real(R8Ki), parameter :: InductionLimit = 1000000.0_R8Ki
 
    ! compute tangential induction factor
    if ( EqualRealNos(cphi,0.0_R8Ki) ) then
