@@ -71,9 +71,9 @@ IMPLICIT NONE
     INTEGER(IntKi)  :: FilterInit      !< Switch to filter the initial wake plane deficit and select the number of grid points for the filter {0: no filter, 1: filter of size 1} or DEFAULT [DEFAULT=0: if Mod_Wake is 1 or 3, or DEFAULT=2: if Mod_Wwake is 2] (switch) [-]
     REAL(ReKi)  :: k_vCurl      !< Calibrated parameter for the eddy viscosity in curled-wake model [>=0.0] [-]
     LOGICAL  :: OutAllPlanes      !< Output all planes [-]
-    LOGICAL  :: WkAdT      !< Switch for turning on and off wake-added turbulence [-]
-    REAL(ReKi)  :: k_m1_WkAdT      !< Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.6] [-]
-    REAL(ReKi)  :: k_m2_WkAdT      !< Calibrated parameter for the influence of the radial velocity gradient of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.35] [-]
+    LOGICAL  :: WAT      !< Switch for turning on and off wake-added turbulence [-]
+    REAL(ReKi)  :: WAT_k_Def      !< Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.6] [-]
+    REAL(ReKi)  :: WAT_k_Grad      !< Calibrated parameter for the influence of the radial velocity gradient of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.35] [-]
   END TYPE WD_InputFileType
 ! =======================
 ! =========  WD_InitInputType  =======
@@ -115,9 +115,6 @@ IMPLICIT NONE
     REAL(ReKi)  :: Vx_rel_disk_filt      !< Time-filtered rotor-disk-averaged relative wind speed (ambient + deficits + motion), normal to disk [m/s]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: Ct_azavg_filt      !< Time-filtered azimuthally averaged thrust force coefficient (normal to disk), distributed radially [-]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: Cq_azavg_filt      !< Time-filtered azimuthally averaged torque coefficient (normal to disk), distributed radially [-]
-    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: Vx_turb      !< Non-scaled turbulence for each wake plane [-]
-    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: Vy_turb      !< Non-scaled turbulence for each wake plane [-]
-    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: Vz_turb      !< Non-scaled turbulence for each wake plane [-]
   END TYPE WD_DiscreteStateType
 ! =======================
 ! =========  WD_ConstraintStateType  =======
@@ -132,28 +129,29 @@ IMPLICIT NONE
 ! =======================
 ! =========  WD_MiscVarType  =======
   TYPE, PUBLIC :: WD_MiscVarType
-    REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: dvtdr      !<  [-]
-    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: vt_tot      !<  [-]
-    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: vt_amb      !<  [-]
-    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: vt_shr      !<  [-]
-    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: vt_tot2      !<  [-]
-    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: vt_amb2      !<  [-]
-    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: vt_shr2      !<  [-]
-    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: dvx_dy      !<  [-]
-    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: dvx_dz      !<  [-]
-    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: nu_dvx_dy      !<  [-]
-    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: nu_dvx_dz      !<  [-]
-    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: dnuvx_dy      !<  [-]
-    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: dnuvx_dz      !<  [-]
+    REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: dvtdr      !< Radial gradient of total eddy viscosity (nr) [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: vt_tot      !< Polar total   eddy viscosity (nr,np) [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: vt_amb      !< Polar ambient eddy viscosity (nr,np) [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: vt_shr      !< Polar shear   eddy viscosity (nr,np) [-]
+    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: vt_tot2      !< Cartesian total   eddy viscosity (ny,nz,np) [-]
+    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: vt_amb2      !< Cartesian ambient eddy viscosity (ny,nz,np) [-]
+    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: vt_shr2      !< Cartesian shear   eddy viscosity (ny,nz,np) [-]
+    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: dvx_dy      !< Cartesian velocity gradient dVx/dy [-]
+    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: dvx_dz      !< Cartesian velocity gradient dVx/dz [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: nu_dvx_dy      !< Product of total eddy viscosity and gradient [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: nu_dvx_dz      !< Product of total eddy viscosity and gradient [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: dnuvx_dy      !< Gradient of nu_dvx_dy wrt y [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: dnuvx_dz      !< Gradient of nu_dvx_dz wrt z [-]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: a      !<  [-]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: b      !<  [-]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: c      !<  [-]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: d      !<  [-]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: r_wake      !<  [-]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: Vx_high      !<  [-]
-    REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: Vx_polar      !< Vx as function of r for Carteisna implementation [-]
-    REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: Vt_wake      !< Vx as function of r for Carteisna implementation [-]
-    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: k_mt      !< Scaling factor k_mt(y,z,x) for wake-added turbulence [-]
+    REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: Vx_polar      !< Vx as function of r for Cartesian implementation [-]
+    REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: Vt_wake      !< Vr as function of r for Cartesian implementation [-]
+    REAL(ReKi)  :: GammaCurl      !< Circulation used in Curled wake model [-]
+    REAL(ReKi)  :: Ct_avg      !< Circulation used in Curled wake model [-]
   END TYPE WD_MiscVarType
 ! =======================
 ! =========  WD_ParameterType  =======
@@ -170,7 +168,7 @@ IMPLICIT NONE
     REAL(ReKi)  :: k_VortexDecay      !< Vortex decay constant for curl [-]
     REAL(ReKi)  :: sigma_D      !< The width of the Gaussian vortices used for the curled wake model divided by diameter [-]
     INTEGER(IntKi)  :: NumVortices      !< The number of vortices used for the curled wake model [-]
-    REAL(ReKi)  :: filtParam      !< alpha, Low-pass time-filter parameter, with a value between 0 (minimum filtering) and 1 (maximum filtering) (exclusive) [-]
+    REAL(ReKi)  :: filtParam      !< Low-pass time-filter parameter, with a value between 0 (minimum filtering) and 1 (maximum filtering) (exclusive) [-]
     REAL(ReKi)  :: oneMinusFiltParam      !< 1.0 - filtParam [-]
     REAL(ReKi)  :: C_HWkDfl_O      !< Calibrated parameter in the correction for wake deflection defining the horizontal offset at the rotor [m]
     REAL(ReKi)  :: C_HWkDfl_OY      !< Calibrated parameter in the correction for wake deflection defining the horizontal offset at the rotor scaled with yaw error [m/rad]
@@ -193,10 +191,11 @@ IMPLICIT NONE
     REAL(ReKi)  :: k_vCurl      !< Calibrated parameter for the eddy viscosity in curled-wake model [>=0.0] [-]
     LOGICAL  :: OutAllPlanes      !< Output all planes [-]
     CHARACTER(1024)  :: OutFileRoot      !< The root name derived from the primary FAST.Farm input file [-]
+    CHARACTER(1024)  :: OutFileVTKDir      !< The parent directory for all VTK files written by WD [-]
     INTEGER(IntKi)  :: TurbNum = 0      !< Turbine ID number (start with 1; end with number of turbines) [-]
-    LOGICAL  :: WkAdT      !< Switch for turning on and off wake-added turbulence [-]
-    REAL(ReKi)  :: k_m1_WkAdT      !< Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.6] [-]
-    REAL(ReKi)  :: k_m2_WkAdT      !< Calibrated parameter for the influence of the radial velocity gradient of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.35] [-]
+    LOGICAL  :: WAT      !< Switch for turning on and off wake-added turbulence [-]
+    REAL(ReKi)  :: WAT_k_Def      !< Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.6] [-]
+    REAL(ReKi)  :: WAT_k_Grad      !< Calibrated parameter for the influence of the radial velocity gradient of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.35] [-]
   END TYPE WD_ParameterType
 ! =======================
 ! =========  WD_InputType  =======
@@ -219,14 +218,14 @@ IMPLICIT NONE
   TYPE, PUBLIC :: WD_OutputType
     REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: xhat_plane      !< Orientations of wake planes, normal to wake planes [-]
     REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: p_plane      !< Center positions of wake planes [m]
-    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: Vx_wake      !< TODO Axial wake velocity deficit at wake planes, distributed radially [m/s]
-    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: Vr_wake      !< TODO Radial wake velocity deficit at wake planes, distributed radially [m/s]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: Vx_wake      !< Axial wake velocity deficit at wake planes, distributed radially [m/s]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: Vr_wake      !< Radial wake velocity deficit at wake planes, distributed radially [m/s]
     REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: Vx_wake2      !< Axial wake velocity deficit at wake planes, distributed across the plane [m/s]
     REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: Vy_wake2      !< Transverse horizontal wake velocity deficit at wake planes, distributed across the plane [m/s]
     REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: Vz_wake2      !< Transverse nominally vertical wake velocity deficit at wake planes, distributed across the plane [m/s]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: D_wake      !< Wake diameters at wake planes [m]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: x_plane      !< Downwind distance from rotor to each wake plane [m]
-    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: k_mt      !< Scaling factor k_mt(r,x) for wake-added turbulence [-]
+    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: WAT_k_mt      !< Scaling factor k_mt(iP,y,z) for wake-added turbulence [-]
   END TYPE WD_OutputType
 ! =======================
 CONTAINS
@@ -276,20 +275,32 @@ CONTAINS
     DstInputFileTypeData%FilterInit = SrcInputFileTypeData%FilterInit
     DstInputFileTypeData%k_vCurl = SrcInputFileTypeData%k_vCurl
     DstInputFileTypeData%OutAllPlanes = SrcInputFileTypeData%OutAllPlanes
-    DstInputFileTypeData%WkAdT = SrcInputFileTypeData%WkAdT
-    DstInputFileTypeData%k_m1_WkAdT = SrcInputFileTypeData%k_m1_WkAdT
-    DstInputFileTypeData%k_m2_WkAdT = SrcInputFileTypeData%k_m2_WkAdT
+    DstInputFileTypeData%WAT = SrcInputFileTypeData%WAT
+    DstInputFileTypeData%WAT_k_Def = SrcInputFileTypeData%WAT_k_Def
+    DstInputFileTypeData%WAT_k_Grad = SrcInputFileTypeData%WAT_k_Grad
  END SUBROUTINE WD_CopyInputFileType
 
- SUBROUTINE WD_DestroyInputFileType( InputFileTypeData, ErrStat, ErrMsg )
+ SUBROUTINE WD_DestroyInputFileType( InputFileTypeData, ErrStat, ErrMsg, DEALLOCATEpointers )
   TYPE(WD_InputFileType), INTENT(INOUT) :: InputFileTypeData
   INTEGER(IntKi),  INTENT(  OUT) :: ErrStat
   CHARACTER(*),    INTENT(  OUT) :: ErrMsg
-  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyInputFileType'
+  LOGICAL,OPTIONAL,INTENT(IN   ) :: DEALLOCATEpointers
+  
   INTEGER(IntKi)                 :: i, i1, i2, i3, i4, i5 
-! 
+  LOGICAL                        :: DEALLOCATEpointers_local
+  INTEGER(IntKi)                 :: ErrStat2
+  CHARACTER(ErrMsgLen)           :: ErrMsg2
+  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyInputFileType'
+
   ErrStat = ErrID_None
   ErrMsg  = ""
+
+  IF (PRESENT(DEALLOCATEpointers)) THEN
+     DEALLOCATEpointers_local = DEALLOCATEpointers
+  ELSE
+     DEALLOCATEpointers_local = .true.
+  END IF
+  
  END SUBROUTINE WD_DestroyInputFileType
 
  SUBROUTINE WD_PackInputFileType( ReKiBuf, DbKiBuf, IntKiBuf, Indata, ErrStat, ErrMsg, SizeOnly )
@@ -356,9 +367,9 @@ CONTAINS
       Int_BufSz  = Int_BufSz  + 1  ! FilterInit
       Re_BufSz   = Re_BufSz   + 1  ! k_vCurl
       Int_BufSz  = Int_BufSz  + 1  ! OutAllPlanes
-      Int_BufSz  = Int_BufSz  + 1  ! WkAdT
-      Re_BufSz   = Re_BufSz   + 1  ! k_m1_WkAdT
-      Re_BufSz   = Re_BufSz   + 1  ! k_m2_WkAdT
+      Int_BufSz  = Int_BufSz  + 1  ! WAT
+      Re_BufSz   = Re_BufSz   + 1  ! WAT_k_Def
+      Re_BufSz   = Re_BufSz   + 1  ! WAT_k_Grad
   IF ( Re_BufSz  .GT. 0 ) THEN 
      ALLOCATE( ReKiBuf(  Re_BufSz  ), STAT=ErrStat2 )
      IF (ErrStat2 /= 0) THEN 
@@ -444,11 +455,11 @@ CONTAINS
     Re_Xferred = Re_Xferred + 1
     IntKiBuf(Int_Xferred) = TRANSFER(InData%OutAllPlanes, IntKiBuf(1))
     Int_Xferred = Int_Xferred + 1
-    IntKiBuf(Int_Xferred) = TRANSFER(InData%WkAdT, IntKiBuf(1))
+    IntKiBuf(Int_Xferred) = TRANSFER(InData%WAT, IntKiBuf(1))
     Int_Xferred = Int_Xferred + 1
-    ReKiBuf(Re_Xferred) = InData%k_m1_WkAdT
+    ReKiBuf(Re_Xferred) = InData%WAT_k_Def
     Re_Xferred = Re_Xferred + 1
-    ReKiBuf(Re_Xferred) = InData%k_m2_WkAdT
+    ReKiBuf(Re_Xferred) = InData%WAT_k_Grad
     Re_Xferred = Re_Xferred + 1
  END SUBROUTINE WD_PackInputFileType
 
@@ -539,11 +550,11 @@ CONTAINS
     Re_Xferred = Re_Xferred + 1
     OutData%OutAllPlanes = TRANSFER(IntKiBuf(Int_Xferred), OutData%OutAllPlanes)
     Int_Xferred = Int_Xferred + 1
-    OutData%WkAdT = TRANSFER(IntKiBuf(Int_Xferred), OutData%WkAdT)
+    OutData%WAT = TRANSFER(IntKiBuf(Int_Xferred), OutData%WAT)
     Int_Xferred = Int_Xferred + 1
-    OutData%k_m1_WkAdT = ReKiBuf(Re_Xferred)
+    OutData%WAT_k_Def = ReKiBuf(Re_Xferred)
     Re_Xferred = Re_Xferred + 1
-    OutData%k_m2_WkAdT = ReKiBuf(Re_Xferred)
+    OutData%WAT_k_Grad = ReKiBuf(Re_Xferred)
     Re_Xferred = Re_Xferred + 1
  END SUBROUTINE WD_UnPackInputFileType
 
@@ -568,16 +579,29 @@ CONTAINS
     DstInitInputData%OutFileRoot = SrcInitInputData%OutFileRoot
  END SUBROUTINE WD_CopyInitInput
 
- SUBROUTINE WD_DestroyInitInput( InitInputData, ErrStat, ErrMsg )
+ SUBROUTINE WD_DestroyInitInput( InitInputData, ErrStat, ErrMsg, DEALLOCATEpointers )
   TYPE(WD_InitInputType), INTENT(INOUT) :: InitInputData
   INTEGER(IntKi),  INTENT(  OUT) :: ErrStat
   CHARACTER(*),    INTENT(  OUT) :: ErrMsg
-  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyInitInput'
+  LOGICAL,OPTIONAL,INTENT(IN   ) :: DEALLOCATEpointers
+  
   INTEGER(IntKi)                 :: i, i1, i2, i3, i4, i5 
-! 
+  LOGICAL                        :: DEALLOCATEpointers_local
+  INTEGER(IntKi)                 :: ErrStat2
+  CHARACTER(ErrMsgLen)           :: ErrMsg2
+  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyInitInput'
+
   ErrStat = ErrID_None
   ErrMsg  = ""
-  CALL WD_Destroyinputfiletype( InitInputData%InputFileData, ErrStat, ErrMsg )
+
+  IF (PRESENT(DEALLOCATEpointers)) THEN
+     DEALLOCATEpointers_local = DEALLOCATEpointers
+  ELSE
+     DEALLOCATEpointers_local = .true.
+  END IF
+  
+  CALL WD_Destroyinputfiletype( InitInputData%InputFileData, ErrStat2, ErrMsg2, DEALLOCATEpointers_local )
+     CALL SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
  END SUBROUTINE WD_DestroyInitInput
 
  SUBROUTINE WD_PackInitInput( ReKiBuf, DbKiBuf, IntKiBuf, Indata, ErrStat, ErrMsg, SizeOnly )
@@ -816,22 +840,35 @@ ENDIF
          IF (ErrStat>=AbortErrLev) RETURN
  END SUBROUTINE WD_CopyInitOutput
 
- SUBROUTINE WD_DestroyInitOutput( InitOutputData, ErrStat, ErrMsg )
+ SUBROUTINE WD_DestroyInitOutput( InitOutputData, ErrStat, ErrMsg, DEALLOCATEpointers )
   TYPE(WD_InitOutputType), INTENT(INOUT) :: InitOutputData
   INTEGER(IntKi),  INTENT(  OUT) :: ErrStat
   CHARACTER(*),    INTENT(  OUT) :: ErrMsg
-  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyInitOutput'
+  LOGICAL,OPTIONAL,INTENT(IN   ) :: DEALLOCATEpointers
+  
   INTEGER(IntKi)                 :: i, i1, i2, i3, i4, i5 
-! 
+  LOGICAL                        :: DEALLOCATEpointers_local
+  INTEGER(IntKi)                 :: ErrStat2
+  CHARACTER(ErrMsgLen)           :: ErrMsg2
+  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyInitOutput'
+
   ErrStat = ErrID_None
   ErrMsg  = ""
+
+  IF (PRESENT(DEALLOCATEpointers)) THEN
+     DEALLOCATEpointers_local = DEALLOCATEpointers
+  ELSE
+     DEALLOCATEpointers_local = .true.
+  END IF
+  
 IF (ALLOCATED(InitOutputData%WriteOutputHdr)) THEN
   DEALLOCATE(InitOutputData%WriteOutputHdr)
 ENDIF
 IF (ALLOCATED(InitOutputData%WriteOutputUnt)) THEN
   DEALLOCATE(InitOutputData%WriteOutputUnt)
 ENDIF
-  CALL NWTC_Library_Destroyprogdesc( InitOutputData%Ver, ErrStat, ErrMsg )
+  CALL NWTC_Library_Destroyprogdesc( InitOutputData%Ver, ErrStat2, ErrMsg2, DEALLOCATEpointers_local )
+     CALL SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
  END SUBROUTINE WD_DestroyInitOutput
 
  SUBROUTINE WD_PackInitOutput( ReKiBuf, DbKiBuf, IntKiBuf, Indata, ErrStat, ErrMsg, SizeOnly )
@@ -1114,15 +1151,27 @@ ENDIF
     DstContStateData%DummyContState = SrcContStateData%DummyContState
  END SUBROUTINE WD_CopyContState
 
- SUBROUTINE WD_DestroyContState( ContStateData, ErrStat, ErrMsg )
+ SUBROUTINE WD_DestroyContState( ContStateData, ErrStat, ErrMsg, DEALLOCATEpointers )
   TYPE(WD_ContinuousStateType), INTENT(INOUT) :: ContStateData
   INTEGER(IntKi),  INTENT(  OUT) :: ErrStat
   CHARACTER(*),    INTENT(  OUT) :: ErrMsg
-  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyContState'
+  LOGICAL,OPTIONAL,INTENT(IN   ) :: DEALLOCATEpointers
+  
   INTEGER(IntKi)                 :: i, i1, i2, i3, i4, i5 
-! 
+  LOGICAL                        :: DEALLOCATEpointers_local
+  INTEGER(IntKi)                 :: ErrStat2
+  CHARACTER(ErrMsgLen)           :: ErrMsg2
+  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyContState'
+
   ErrStat = ErrID_None
   ErrMsg  = ""
+
+  IF (PRESENT(DEALLOCATEpointers)) THEN
+     DEALLOCATEpointers_local = DEALLOCATEpointers
+  ELSE
+     DEALLOCATEpointers_local = .true.
+  END IF
+  
  END SUBROUTINE WD_DestroyContState
 
  SUBROUTINE WD_PackContState( ReKiBuf, DbKiBuf, IntKiBuf, Indata, ErrStat, ErrMsg, SizeOnly )
@@ -1444,65 +1493,29 @@ IF (ALLOCATED(SrcDiscStateData%Cq_azavg_filt)) THEN
   END IF
     DstDiscStateData%Cq_azavg_filt = SrcDiscStateData%Cq_azavg_filt
 ENDIF
-IF (ALLOCATED(SrcDiscStateData%Vx_turb)) THEN
-  i1_l = LBOUND(SrcDiscStateData%Vx_turb,1)
-  i1_u = UBOUND(SrcDiscStateData%Vx_turb,1)
-  i2_l = LBOUND(SrcDiscStateData%Vx_turb,2)
-  i2_u = UBOUND(SrcDiscStateData%Vx_turb,2)
-  i3_l = LBOUND(SrcDiscStateData%Vx_turb,3)
-  i3_u = UBOUND(SrcDiscStateData%Vx_turb,3)
-  IF (.NOT. ALLOCATED(DstDiscStateData%Vx_turb)) THEN 
-    ALLOCATE(DstDiscStateData%Vx_turb(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
-    IF (ErrStat2 /= 0) THEN 
-      CALL SetErrStat(ErrID_Fatal, 'Error allocating DstDiscStateData%Vx_turb.', ErrStat, ErrMsg,RoutineName)
-      RETURN
-    END IF
-  END IF
-    DstDiscStateData%Vx_turb = SrcDiscStateData%Vx_turb
-ENDIF
-IF (ALLOCATED(SrcDiscStateData%Vy_turb)) THEN
-  i1_l = LBOUND(SrcDiscStateData%Vy_turb,1)
-  i1_u = UBOUND(SrcDiscStateData%Vy_turb,1)
-  i2_l = LBOUND(SrcDiscStateData%Vy_turb,2)
-  i2_u = UBOUND(SrcDiscStateData%Vy_turb,2)
-  i3_l = LBOUND(SrcDiscStateData%Vy_turb,3)
-  i3_u = UBOUND(SrcDiscStateData%Vy_turb,3)
-  IF (.NOT. ALLOCATED(DstDiscStateData%Vy_turb)) THEN 
-    ALLOCATE(DstDiscStateData%Vy_turb(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
-    IF (ErrStat2 /= 0) THEN 
-      CALL SetErrStat(ErrID_Fatal, 'Error allocating DstDiscStateData%Vy_turb.', ErrStat, ErrMsg,RoutineName)
-      RETURN
-    END IF
-  END IF
-    DstDiscStateData%Vy_turb = SrcDiscStateData%Vy_turb
-ENDIF
-IF (ALLOCATED(SrcDiscStateData%Vz_turb)) THEN
-  i1_l = LBOUND(SrcDiscStateData%Vz_turb,1)
-  i1_u = UBOUND(SrcDiscStateData%Vz_turb,1)
-  i2_l = LBOUND(SrcDiscStateData%Vz_turb,2)
-  i2_u = UBOUND(SrcDiscStateData%Vz_turb,2)
-  i3_l = LBOUND(SrcDiscStateData%Vz_turb,3)
-  i3_u = UBOUND(SrcDiscStateData%Vz_turb,3)
-  IF (.NOT. ALLOCATED(DstDiscStateData%Vz_turb)) THEN 
-    ALLOCATE(DstDiscStateData%Vz_turb(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
-    IF (ErrStat2 /= 0) THEN 
-      CALL SetErrStat(ErrID_Fatal, 'Error allocating DstDiscStateData%Vz_turb.', ErrStat, ErrMsg,RoutineName)
-      RETURN
-    END IF
-  END IF
-    DstDiscStateData%Vz_turb = SrcDiscStateData%Vz_turb
-ENDIF
  END SUBROUTINE WD_CopyDiscState
 
- SUBROUTINE WD_DestroyDiscState( DiscStateData, ErrStat, ErrMsg )
+ SUBROUTINE WD_DestroyDiscState( DiscStateData, ErrStat, ErrMsg, DEALLOCATEpointers )
   TYPE(WD_DiscreteStateType), INTENT(INOUT) :: DiscStateData
   INTEGER(IntKi),  INTENT(  OUT) :: ErrStat
   CHARACTER(*),    INTENT(  OUT) :: ErrMsg
-  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyDiscState'
+  LOGICAL,OPTIONAL,INTENT(IN   ) :: DEALLOCATEpointers
+  
   INTEGER(IntKi)                 :: i, i1, i2, i3, i4, i5 
-! 
+  LOGICAL                        :: DEALLOCATEpointers_local
+  INTEGER(IntKi)                 :: ErrStat2
+  CHARACTER(ErrMsgLen)           :: ErrMsg2
+  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyDiscState'
+
   ErrStat = ErrID_None
   ErrMsg  = ""
+
+  IF (PRESENT(DEALLOCATEpointers)) THEN
+     DEALLOCATEpointers_local = DEALLOCATEpointers
+  ELSE
+     DEALLOCATEpointers_local = .true.
+  END IF
+  
 IF (ALLOCATED(DiscStateData%xhat_plane)) THEN
   DEALLOCATE(DiscStateData%xhat_plane)
 ENDIF
@@ -1547,15 +1560,6 @@ IF (ALLOCATED(DiscStateData%Ct_azavg_filt)) THEN
 ENDIF
 IF (ALLOCATED(DiscStateData%Cq_azavg_filt)) THEN
   DEALLOCATE(DiscStateData%Cq_azavg_filt)
-ENDIF
-IF (ALLOCATED(DiscStateData%Vx_turb)) THEN
-  DEALLOCATE(DiscStateData%Vx_turb)
-ENDIF
-IF (ALLOCATED(DiscStateData%Vy_turb)) THEN
-  DEALLOCATE(DiscStateData%Vy_turb)
-ENDIF
-IF (ALLOCATED(DiscStateData%Vz_turb)) THEN
-  DEALLOCATE(DiscStateData%Vz_turb)
 ENDIF
  END SUBROUTINE WD_DestroyDiscState
 
@@ -1671,21 +1675,6 @@ ENDIF
   IF ( ALLOCATED(InData%Cq_azavg_filt) ) THEN
     Int_BufSz   = Int_BufSz   + 2*1  ! Cq_azavg_filt upper/lower bounds for each dimension
       Re_BufSz   = Re_BufSz   + SIZE(InData%Cq_azavg_filt)  ! Cq_azavg_filt
-  END IF
-  Int_BufSz   = Int_BufSz   + 1     ! Vx_turb allocated yes/no
-  IF ( ALLOCATED(InData%Vx_turb) ) THEN
-    Int_BufSz   = Int_BufSz   + 2*3  ! Vx_turb upper/lower bounds for each dimension
-      Re_BufSz   = Re_BufSz   + SIZE(InData%Vx_turb)  ! Vx_turb
-  END IF
-  Int_BufSz   = Int_BufSz   + 1     ! Vy_turb allocated yes/no
-  IF ( ALLOCATED(InData%Vy_turb) ) THEN
-    Int_BufSz   = Int_BufSz   + 2*3  ! Vy_turb upper/lower bounds for each dimension
-      Re_BufSz   = Re_BufSz   + SIZE(InData%Vy_turb)  ! Vy_turb
-  END IF
-  Int_BufSz   = Int_BufSz   + 1     ! Vz_turb allocated yes/no
-  IF ( ALLOCATED(InData%Vz_turb) ) THEN
-    Int_BufSz   = Int_BufSz   + 2*3  ! Vz_turb upper/lower bounds for each dimension
-      Re_BufSz   = Re_BufSz   + SIZE(InData%Vz_turb)  ! Vz_turb
   END IF
   IF ( Re_BufSz  .GT. 0 ) THEN 
      ALLOCATE( ReKiBuf(  Re_BufSz  ), STAT=ErrStat2 )
@@ -1998,81 +1987,6 @@ ENDIF
       DO i1 = LBOUND(InData%Cq_azavg_filt,1), UBOUND(InData%Cq_azavg_filt,1)
         ReKiBuf(Re_Xferred) = InData%Cq_azavg_filt(i1)
         Re_Xferred = Re_Xferred + 1
-      END DO
-  END IF
-  IF ( .NOT. ALLOCATED(InData%Vx_turb) ) THEN
-    IntKiBuf( Int_Xferred ) = 0
-    Int_Xferred = Int_Xferred + 1
-  ELSE
-    IntKiBuf( Int_Xferred ) = 1
-    Int_Xferred = Int_Xferred + 1
-    IntKiBuf( Int_Xferred    ) = LBOUND(InData%Vx_turb,1)
-    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%Vx_turb,1)
-    Int_Xferred = Int_Xferred + 2
-    IntKiBuf( Int_Xferred    ) = LBOUND(InData%Vx_turb,2)
-    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%Vx_turb,2)
-    Int_Xferred = Int_Xferred + 2
-    IntKiBuf( Int_Xferred    ) = LBOUND(InData%Vx_turb,3)
-    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%Vx_turb,3)
-    Int_Xferred = Int_Xferred + 2
-
-      DO i3 = LBOUND(InData%Vx_turb,3), UBOUND(InData%Vx_turb,3)
-        DO i2 = LBOUND(InData%Vx_turb,2), UBOUND(InData%Vx_turb,2)
-          DO i1 = LBOUND(InData%Vx_turb,1), UBOUND(InData%Vx_turb,1)
-            ReKiBuf(Re_Xferred) = InData%Vx_turb(i1,i2,i3)
-            Re_Xferred = Re_Xferred + 1
-          END DO
-        END DO
-      END DO
-  END IF
-  IF ( .NOT. ALLOCATED(InData%Vy_turb) ) THEN
-    IntKiBuf( Int_Xferred ) = 0
-    Int_Xferred = Int_Xferred + 1
-  ELSE
-    IntKiBuf( Int_Xferred ) = 1
-    Int_Xferred = Int_Xferred + 1
-    IntKiBuf( Int_Xferred    ) = LBOUND(InData%Vy_turb,1)
-    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%Vy_turb,1)
-    Int_Xferred = Int_Xferred + 2
-    IntKiBuf( Int_Xferred    ) = LBOUND(InData%Vy_turb,2)
-    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%Vy_turb,2)
-    Int_Xferred = Int_Xferred + 2
-    IntKiBuf( Int_Xferred    ) = LBOUND(InData%Vy_turb,3)
-    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%Vy_turb,3)
-    Int_Xferred = Int_Xferred + 2
-
-      DO i3 = LBOUND(InData%Vy_turb,3), UBOUND(InData%Vy_turb,3)
-        DO i2 = LBOUND(InData%Vy_turb,2), UBOUND(InData%Vy_turb,2)
-          DO i1 = LBOUND(InData%Vy_turb,1), UBOUND(InData%Vy_turb,1)
-            ReKiBuf(Re_Xferred) = InData%Vy_turb(i1,i2,i3)
-            Re_Xferred = Re_Xferred + 1
-          END DO
-        END DO
-      END DO
-  END IF
-  IF ( .NOT. ALLOCATED(InData%Vz_turb) ) THEN
-    IntKiBuf( Int_Xferred ) = 0
-    Int_Xferred = Int_Xferred + 1
-  ELSE
-    IntKiBuf( Int_Xferred ) = 1
-    Int_Xferred = Int_Xferred + 1
-    IntKiBuf( Int_Xferred    ) = LBOUND(InData%Vz_turb,1)
-    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%Vz_turb,1)
-    Int_Xferred = Int_Xferred + 2
-    IntKiBuf( Int_Xferred    ) = LBOUND(InData%Vz_turb,2)
-    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%Vz_turb,2)
-    Int_Xferred = Int_Xferred + 2
-    IntKiBuf( Int_Xferred    ) = LBOUND(InData%Vz_turb,3)
-    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%Vz_turb,3)
-    Int_Xferred = Int_Xferred + 2
-
-      DO i3 = LBOUND(InData%Vz_turb,3), UBOUND(InData%Vz_turb,3)
-        DO i2 = LBOUND(InData%Vz_turb,2), UBOUND(InData%Vz_turb,2)
-          DO i1 = LBOUND(InData%Vz_turb,1), UBOUND(InData%Vz_turb,1)
-            ReKiBuf(Re_Xferred) = InData%Vz_turb(i1,i2,i3)
-            Re_Xferred = Re_Xferred + 1
-          END DO
-        END DO
       END DO
   END IF
  END SUBROUTINE WD_PackDiscState
@@ -2437,90 +2351,6 @@ ENDIF
         Re_Xferred = Re_Xferred + 1
       END DO
   END IF
-  IF ( IntKiBuf( Int_Xferred ) == 0 ) THEN  ! Vx_turb not allocated
-    Int_Xferred = Int_Xferred + 1
-  ELSE
-    Int_Xferred = Int_Xferred + 1
-    i1_l = IntKiBuf( Int_Xferred    )
-    i1_u = IntKiBuf( Int_Xferred + 1)
-    Int_Xferred = Int_Xferred + 2
-    i2_l = IntKiBuf( Int_Xferred    )
-    i2_u = IntKiBuf( Int_Xferred + 1)
-    Int_Xferred = Int_Xferred + 2
-    i3_l = IntKiBuf( Int_Xferred    )
-    i3_u = IntKiBuf( Int_Xferred + 1)
-    Int_Xferred = Int_Xferred + 2
-    IF (ALLOCATED(OutData%Vx_turb)) DEALLOCATE(OutData%Vx_turb)
-    ALLOCATE(OutData%Vx_turb(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
-    IF (ErrStat2 /= 0) THEN 
-       CALL SetErrStat(ErrID_Fatal, 'Error allocating OutData%Vx_turb.', ErrStat, ErrMsg,RoutineName)
-       RETURN
-    END IF
-      DO i3 = LBOUND(OutData%Vx_turb,3), UBOUND(OutData%Vx_turb,3)
-        DO i2 = LBOUND(OutData%Vx_turb,2), UBOUND(OutData%Vx_turb,2)
-          DO i1 = LBOUND(OutData%Vx_turb,1), UBOUND(OutData%Vx_turb,1)
-            OutData%Vx_turb(i1,i2,i3) = ReKiBuf(Re_Xferred)
-            Re_Xferred = Re_Xferred + 1
-          END DO
-        END DO
-      END DO
-  END IF
-  IF ( IntKiBuf( Int_Xferred ) == 0 ) THEN  ! Vy_turb not allocated
-    Int_Xferred = Int_Xferred + 1
-  ELSE
-    Int_Xferred = Int_Xferred + 1
-    i1_l = IntKiBuf( Int_Xferred    )
-    i1_u = IntKiBuf( Int_Xferred + 1)
-    Int_Xferred = Int_Xferred + 2
-    i2_l = IntKiBuf( Int_Xferred    )
-    i2_u = IntKiBuf( Int_Xferred + 1)
-    Int_Xferred = Int_Xferred + 2
-    i3_l = IntKiBuf( Int_Xferred    )
-    i3_u = IntKiBuf( Int_Xferred + 1)
-    Int_Xferred = Int_Xferred + 2
-    IF (ALLOCATED(OutData%Vy_turb)) DEALLOCATE(OutData%Vy_turb)
-    ALLOCATE(OutData%Vy_turb(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
-    IF (ErrStat2 /= 0) THEN 
-       CALL SetErrStat(ErrID_Fatal, 'Error allocating OutData%Vy_turb.', ErrStat, ErrMsg,RoutineName)
-       RETURN
-    END IF
-      DO i3 = LBOUND(OutData%Vy_turb,3), UBOUND(OutData%Vy_turb,3)
-        DO i2 = LBOUND(OutData%Vy_turb,2), UBOUND(OutData%Vy_turb,2)
-          DO i1 = LBOUND(OutData%Vy_turb,1), UBOUND(OutData%Vy_turb,1)
-            OutData%Vy_turb(i1,i2,i3) = ReKiBuf(Re_Xferred)
-            Re_Xferred = Re_Xferred + 1
-          END DO
-        END DO
-      END DO
-  END IF
-  IF ( IntKiBuf( Int_Xferred ) == 0 ) THEN  ! Vz_turb not allocated
-    Int_Xferred = Int_Xferred + 1
-  ELSE
-    Int_Xferred = Int_Xferred + 1
-    i1_l = IntKiBuf( Int_Xferred    )
-    i1_u = IntKiBuf( Int_Xferred + 1)
-    Int_Xferred = Int_Xferred + 2
-    i2_l = IntKiBuf( Int_Xferred    )
-    i2_u = IntKiBuf( Int_Xferred + 1)
-    Int_Xferred = Int_Xferred + 2
-    i3_l = IntKiBuf( Int_Xferred    )
-    i3_u = IntKiBuf( Int_Xferred + 1)
-    Int_Xferred = Int_Xferred + 2
-    IF (ALLOCATED(OutData%Vz_turb)) DEALLOCATE(OutData%Vz_turb)
-    ALLOCATE(OutData%Vz_turb(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
-    IF (ErrStat2 /= 0) THEN 
-       CALL SetErrStat(ErrID_Fatal, 'Error allocating OutData%Vz_turb.', ErrStat, ErrMsg,RoutineName)
-       RETURN
-    END IF
-      DO i3 = LBOUND(OutData%Vz_turb,3), UBOUND(OutData%Vz_turb,3)
-        DO i2 = LBOUND(OutData%Vz_turb,2), UBOUND(OutData%Vz_turb,2)
-          DO i1 = LBOUND(OutData%Vz_turb,1), UBOUND(OutData%Vz_turb,1)
-            OutData%Vz_turb(i1,i2,i3) = ReKiBuf(Re_Xferred)
-            Re_Xferred = Re_Xferred + 1
-          END DO
-        END DO
-      END DO
-  END IF
  END SUBROUTINE WD_UnPackDiscState
 
  SUBROUTINE WD_CopyConstrState( SrcConstrStateData, DstConstrStateData, CtrlCode, ErrStat, ErrMsg )
@@ -2540,15 +2370,27 @@ ENDIF
     DstConstrStateData%DummyConstrState = SrcConstrStateData%DummyConstrState
  END SUBROUTINE WD_CopyConstrState
 
- SUBROUTINE WD_DestroyConstrState( ConstrStateData, ErrStat, ErrMsg )
+ SUBROUTINE WD_DestroyConstrState( ConstrStateData, ErrStat, ErrMsg, DEALLOCATEpointers )
   TYPE(WD_ConstraintStateType), INTENT(INOUT) :: ConstrStateData
   INTEGER(IntKi),  INTENT(  OUT) :: ErrStat
   CHARACTER(*),    INTENT(  OUT) :: ErrMsg
-  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyConstrState'
+  LOGICAL,OPTIONAL,INTENT(IN   ) :: DEALLOCATEpointers
+  
   INTEGER(IntKi)                 :: i, i1, i2, i3, i4, i5 
-! 
+  LOGICAL                        :: DEALLOCATEpointers_local
+  INTEGER(IntKi)                 :: ErrStat2
+  CHARACTER(ErrMsgLen)           :: ErrMsg2
+  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyConstrState'
+
   ErrStat = ErrID_None
   ErrMsg  = ""
+
+  IF (PRESENT(DEALLOCATEpointers)) THEN
+     DEALLOCATEpointers_local = DEALLOCATEpointers
+  ELSE
+     DEALLOCATEpointers_local = .true.
+  END IF
+  
  END SUBROUTINE WD_DestroyConstrState
 
  SUBROUTINE WD_PackConstrState( ReKiBuf, DbKiBuf, IntKiBuf, Indata, ErrStat, ErrMsg, SizeOnly )
@@ -2665,15 +2507,27 @@ ENDIF
     DstOtherStateData%firstPass = SrcOtherStateData%firstPass
  END SUBROUTINE WD_CopyOtherState
 
- SUBROUTINE WD_DestroyOtherState( OtherStateData, ErrStat, ErrMsg )
+ SUBROUTINE WD_DestroyOtherState( OtherStateData, ErrStat, ErrMsg, DEALLOCATEpointers )
   TYPE(WD_OtherStateType), INTENT(INOUT) :: OtherStateData
   INTEGER(IntKi),  INTENT(  OUT) :: ErrStat
   CHARACTER(*),    INTENT(  OUT) :: ErrMsg
-  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyOtherState'
+  LOGICAL,OPTIONAL,INTENT(IN   ) :: DEALLOCATEpointers
+  
   INTEGER(IntKi)                 :: i, i1, i2, i3, i4, i5 
-! 
+  LOGICAL                        :: DEALLOCATEpointers_local
+  INTEGER(IntKi)                 :: ErrStat2
+  CHARACTER(ErrMsgLen)           :: ErrMsg2
+  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyOtherState'
+
   ErrStat = ErrID_None
   ErrMsg  = ""
+
+  IF (PRESENT(DEALLOCATEpointers)) THEN
+     DEALLOCATEpointers_local = DEALLOCATEpointers
+  ELSE
+     DEALLOCATEpointers_local = .true.
+  END IF
+  
  END SUBROUTINE WD_DestroyOtherState
 
  SUBROUTINE WD_PackOtherState( ReKiBuf, DbKiBuf, IntKiBuf, Indata, ErrStat, ErrMsg, SizeOnly )
@@ -3076,33 +2930,31 @@ IF (ALLOCATED(SrcMiscData%Vt_wake)) THEN
   END IF
     DstMiscData%Vt_wake = SrcMiscData%Vt_wake
 ENDIF
-IF (ALLOCATED(SrcMiscData%k_mt)) THEN
-  i1_l = LBOUND(SrcMiscData%k_mt,1)
-  i1_u = UBOUND(SrcMiscData%k_mt,1)
-  i2_l = LBOUND(SrcMiscData%k_mt,2)
-  i2_u = UBOUND(SrcMiscData%k_mt,2)
-  i3_l = LBOUND(SrcMiscData%k_mt,3)
-  i3_u = UBOUND(SrcMiscData%k_mt,3)
-  IF (.NOT. ALLOCATED(DstMiscData%k_mt)) THEN 
-    ALLOCATE(DstMiscData%k_mt(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
-    IF (ErrStat2 /= 0) THEN 
-      CALL SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%k_mt.', ErrStat, ErrMsg,RoutineName)
-      RETURN
-    END IF
-  END IF
-    DstMiscData%k_mt = SrcMiscData%k_mt
-ENDIF
+    DstMiscData%GammaCurl = SrcMiscData%GammaCurl
+    DstMiscData%Ct_avg = SrcMiscData%Ct_avg
  END SUBROUTINE WD_CopyMisc
 
- SUBROUTINE WD_DestroyMisc( MiscData, ErrStat, ErrMsg )
+ SUBROUTINE WD_DestroyMisc( MiscData, ErrStat, ErrMsg, DEALLOCATEpointers )
   TYPE(WD_MiscVarType), INTENT(INOUT) :: MiscData
   INTEGER(IntKi),  INTENT(  OUT) :: ErrStat
   CHARACTER(*),    INTENT(  OUT) :: ErrMsg
-  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyMisc'
+  LOGICAL,OPTIONAL,INTENT(IN   ) :: DEALLOCATEpointers
+  
   INTEGER(IntKi)                 :: i, i1, i2, i3, i4, i5 
-! 
+  LOGICAL                        :: DEALLOCATEpointers_local
+  INTEGER(IntKi)                 :: ErrStat2
+  CHARACTER(ErrMsgLen)           :: ErrMsg2
+  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyMisc'
+
   ErrStat = ErrID_None
   ErrMsg  = ""
+
+  IF (PRESENT(DEALLOCATEpointers)) THEN
+     DEALLOCATEpointers_local = DEALLOCATEpointers
+  ELSE
+     DEALLOCATEpointers_local = .true.
+  END IF
+  
 IF (ALLOCATED(MiscData%dvtdr)) THEN
   DEALLOCATE(MiscData%dvtdr)
 ENDIF
@@ -3165,9 +3017,6 @@ IF (ALLOCATED(MiscData%Vx_polar)) THEN
 ENDIF
 IF (ALLOCATED(MiscData%Vt_wake)) THEN
   DEALLOCATE(MiscData%Vt_wake)
-ENDIF
-IF (ALLOCATED(MiscData%k_mt)) THEN
-  DEALLOCATE(MiscData%k_mt)
 ENDIF
  END SUBROUTINE WD_DestroyMisc
 
@@ -3311,11 +3160,8 @@ ENDIF
     Int_BufSz   = Int_BufSz   + 2*1  ! Vt_wake upper/lower bounds for each dimension
       Re_BufSz   = Re_BufSz   + SIZE(InData%Vt_wake)  ! Vt_wake
   END IF
-  Int_BufSz   = Int_BufSz   + 1     ! k_mt allocated yes/no
-  IF ( ALLOCATED(InData%k_mt) ) THEN
-    Int_BufSz   = Int_BufSz   + 2*3  ! k_mt upper/lower bounds for each dimension
-      Re_BufSz   = Re_BufSz   + SIZE(InData%k_mt)  ! k_mt
-  END IF
+      Re_BufSz   = Re_BufSz   + 1  ! GammaCurl
+      Re_BufSz   = Re_BufSz   + 1  ! Ct_avg
   IF ( Re_BufSz  .GT. 0 ) THEN 
      ALLOCATE( ReKiBuf(  Re_BufSz  ), STAT=ErrStat2 )
      IF (ErrStat2 /= 0) THEN 
@@ -3743,31 +3589,10 @@ ENDIF
         Re_Xferred = Re_Xferred + 1
       END DO
   END IF
-  IF ( .NOT. ALLOCATED(InData%k_mt) ) THEN
-    IntKiBuf( Int_Xferred ) = 0
-    Int_Xferred = Int_Xferred + 1
-  ELSE
-    IntKiBuf( Int_Xferred ) = 1
-    Int_Xferred = Int_Xferred + 1
-    IntKiBuf( Int_Xferred    ) = LBOUND(InData%k_mt,1)
-    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%k_mt,1)
-    Int_Xferred = Int_Xferred + 2
-    IntKiBuf( Int_Xferred    ) = LBOUND(InData%k_mt,2)
-    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%k_mt,2)
-    Int_Xferred = Int_Xferred + 2
-    IntKiBuf( Int_Xferred    ) = LBOUND(InData%k_mt,3)
-    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%k_mt,3)
-    Int_Xferred = Int_Xferred + 2
-
-      DO i3 = LBOUND(InData%k_mt,3), UBOUND(InData%k_mt,3)
-        DO i2 = LBOUND(InData%k_mt,2), UBOUND(InData%k_mt,2)
-          DO i1 = LBOUND(InData%k_mt,1), UBOUND(InData%k_mt,1)
-            ReKiBuf(Re_Xferred) = InData%k_mt(i1,i2,i3)
-            Re_Xferred = Re_Xferred + 1
-          END DO
-        END DO
-      END DO
-  END IF
+    ReKiBuf(Re_Xferred) = InData%GammaCurl
+    Re_Xferred = Re_Xferred + 1
+    ReKiBuf(Re_Xferred) = InData%Ct_avg
+    Re_Xferred = Re_Xferred + 1
  END SUBROUTINE WD_PackMisc
 
  SUBROUTINE WD_UnPackMisc( ReKiBuf, DbKiBuf, IntKiBuf, Outdata, ErrStat, ErrMsg )
@@ -4262,34 +4087,10 @@ ENDIF
         Re_Xferred = Re_Xferred + 1
       END DO
   END IF
-  IF ( IntKiBuf( Int_Xferred ) == 0 ) THEN  ! k_mt not allocated
-    Int_Xferred = Int_Xferred + 1
-  ELSE
-    Int_Xferred = Int_Xferred + 1
-    i1_l = IntKiBuf( Int_Xferred    )
-    i1_u = IntKiBuf( Int_Xferred + 1)
-    Int_Xferred = Int_Xferred + 2
-    i2_l = IntKiBuf( Int_Xferred    )
-    i2_u = IntKiBuf( Int_Xferred + 1)
-    Int_Xferred = Int_Xferred + 2
-    i3_l = IntKiBuf( Int_Xferred    )
-    i3_u = IntKiBuf( Int_Xferred + 1)
-    Int_Xferred = Int_Xferred + 2
-    IF (ALLOCATED(OutData%k_mt)) DEALLOCATE(OutData%k_mt)
-    ALLOCATE(OutData%k_mt(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
-    IF (ErrStat2 /= 0) THEN 
-       CALL SetErrStat(ErrID_Fatal, 'Error allocating OutData%k_mt.', ErrStat, ErrMsg,RoutineName)
-       RETURN
-    END IF
-      DO i3 = LBOUND(OutData%k_mt,3), UBOUND(OutData%k_mt,3)
-        DO i2 = LBOUND(OutData%k_mt,2), UBOUND(OutData%k_mt,2)
-          DO i1 = LBOUND(OutData%k_mt,1), UBOUND(OutData%k_mt,1)
-            OutData%k_mt(i1,i2,i3) = ReKiBuf(Re_Xferred)
-            Re_Xferred = Re_Xferred + 1
-          END DO
-        END DO
-      END DO
-  END IF
+    OutData%GammaCurl = ReKiBuf(Re_Xferred)
+    Re_Xferred = Re_Xferred + 1
+    OutData%Ct_avg = ReKiBuf(Re_Xferred)
+    Re_Xferred = Re_Xferred + 1
  END SUBROUTINE WD_UnPackMisc
 
  SUBROUTINE WD_CopyParam( SrcParamData, DstParamData, CtrlCode, ErrStat, ErrMsg )
@@ -4375,21 +4176,34 @@ ENDIF
     DstParamData%k_vCurl = SrcParamData%k_vCurl
     DstParamData%OutAllPlanes = SrcParamData%OutAllPlanes
     DstParamData%OutFileRoot = SrcParamData%OutFileRoot
+    DstParamData%OutFileVTKDir = SrcParamData%OutFileVTKDir
     DstParamData%TurbNum = SrcParamData%TurbNum
-    DstParamData%WkAdT = SrcParamData%WkAdT
-    DstParamData%k_m1_WkAdT = SrcParamData%k_m1_WkAdT
-    DstParamData%k_m2_WkAdT = SrcParamData%k_m2_WkAdT
+    DstParamData%WAT = SrcParamData%WAT
+    DstParamData%WAT_k_Def = SrcParamData%WAT_k_Def
+    DstParamData%WAT_k_Grad = SrcParamData%WAT_k_Grad
  END SUBROUTINE WD_CopyParam
 
- SUBROUTINE WD_DestroyParam( ParamData, ErrStat, ErrMsg )
+ SUBROUTINE WD_DestroyParam( ParamData, ErrStat, ErrMsg, DEALLOCATEpointers )
   TYPE(WD_ParameterType), INTENT(INOUT) :: ParamData
   INTEGER(IntKi),  INTENT(  OUT) :: ErrStat
   CHARACTER(*),    INTENT(  OUT) :: ErrMsg
-  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyParam'
+  LOGICAL,OPTIONAL,INTENT(IN   ) :: DEALLOCATEpointers
+  
   INTEGER(IntKi)                 :: i, i1, i2, i3, i4, i5 
-! 
+  LOGICAL                        :: DEALLOCATEpointers_local
+  INTEGER(IntKi)                 :: ErrStat2
+  CHARACTER(ErrMsgLen)           :: ErrMsg2
+  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyParam'
+
   ErrStat = ErrID_None
   ErrMsg  = ""
+
+  IF (PRESENT(DEALLOCATEpointers)) THEN
+     DEALLOCATEpointers_local = DEALLOCATEpointers
+  ELSE
+     DEALLOCATEpointers_local = .true.
+  END IF
+  
 IF (ALLOCATED(ParamData%r)) THEN
   DEALLOCATE(ParamData%r)
 ENDIF
@@ -4483,10 +4297,11 @@ ENDIF
       Re_BufSz   = Re_BufSz   + 1  ! k_vCurl
       Int_BufSz  = Int_BufSz  + 1  ! OutAllPlanes
       Int_BufSz  = Int_BufSz  + 1*LEN(InData%OutFileRoot)  ! OutFileRoot
+      Int_BufSz  = Int_BufSz  + 1*LEN(InData%OutFileVTKDir)  ! OutFileVTKDir
       Int_BufSz  = Int_BufSz  + 1  ! TurbNum
-      Int_BufSz  = Int_BufSz  + 1  ! WkAdT
-      Re_BufSz   = Re_BufSz   + 1  ! k_m1_WkAdT
-      Re_BufSz   = Re_BufSz   + 1  ! k_m2_WkAdT
+      Int_BufSz  = Int_BufSz  + 1  ! WAT
+      Re_BufSz   = Re_BufSz   + 1  ! WAT_k_Def
+      Re_BufSz   = Re_BufSz   + 1  ! WAT_k_Grad
   IF ( Re_BufSz  .GT. 0 ) THEN 
      ALLOCATE( ReKiBuf(  Re_BufSz  ), STAT=ErrStat2 )
      IF (ErrStat2 /= 0) THEN 
@@ -4625,13 +4440,17 @@ ENDIF
       IntKiBuf(Int_Xferred) = ICHAR(InData%OutFileRoot(I:I), IntKi)
       Int_Xferred = Int_Xferred + 1
     END DO ! I
+    DO I = 1, LEN(InData%OutFileVTKDir)
+      IntKiBuf(Int_Xferred) = ICHAR(InData%OutFileVTKDir(I:I), IntKi)
+      Int_Xferred = Int_Xferred + 1
+    END DO ! I
     IntKiBuf(Int_Xferred) = InData%TurbNum
     Int_Xferred = Int_Xferred + 1
-    IntKiBuf(Int_Xferred) = TRANSFER(InData%WkAdT, IntKiBuf(1))
+    IntKiBuf(Int_Xferred) = TRANSFER(InData%WAT, IntKiBuf(1))
     Int_Xferred = Int_Xferred + 1
-    ReKiBuf(Re_Xferred) = InData%k_m1_WkAdT
+    ReKiBuf(Re_Xferred) = InData%WAT_k_Def
     Re_Xferred = Re_Xferred + 1
-    ReKiBuf(Re_Xferred) = InData%k_m2_WkAdT
+    ReKiBuf(Re_Xferred) = InData%WAT_k_Grad
     Re_Xferred = Re_Xferred + 1
  END SUBROUTINE WD_PackParam
 
@@ -4782,13 +4601,17 @@ ENDIF
       OutData%OutFileRoot(I:I) = CHAR(IntKiBuf(Int_Xferred))
       Int_Xferred = Int_Xferred + 1
     END DO ! I
+    DO I = 1, LEN(OutData%OutFileVTKDir)
+      OutData%OutFileVTKDir(I:I) = CHAR(IntKiBuf(Int_Xferred))
+      Int_Xferred = Int_Xferred + 1
+    END DO ! I
     OutData%TurbNum = IntKiBuf(Int_Xferred)
     Int_Xferred = Int_Xferred + 1
-    OutData%WkAdT = TRANSFER(IntKiBuf(Int_Xferred), OutData%WkAdT)
+    OutData%WAT = TRANSFER(IntKiBuf(Int_Xferred), OutData%WAT)
     Int_Xferred = Int_Xferred + 1
-    OutData%k_m1_WkAdT = ReKiBuf(Re_Xferred)
+    OutData%WAT_k_Def = ReKiBuf(Re_Xferred)
     Re_Xferred = Re_Xferred + 1
-    OutData%k_m2_WkAdT = ReKiBuf(Re_Xferred)
+    OutData%WAT_k_Grad = ReKiBuf(Re_Xferred)
     Re_Xferred = Re_Xferred + 1
  END SUBROUTINE WD_UnPackParam
 
@@ -4857,15 +4680,27 @@ IF (ALLOCATED(SrcInputData%Cq_azavg)) THEN
 ENDIF
  END SUBROUTINE WD_CopyInput
 
- SUBROUTINE WD_DestroyInput( InputData, ErrStat, ErrMsg )
+ SUBROUTINE WD_DestroyInput( InputData, ErrStat, ErrMsg, DEALLOCATEpointers )
   TYPE(WD_InputType), INTENT(INOUT) :: InputData
   INTEGER(IntKi),  INTENT(  OUT) :: ErrStat
   CHARACTER(*),    INTENT(  OUT) :: ErrMsg
-  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyInput'
+  LOGICAL,OPTIONAL,INTENT(IN   ) :: DEALLOCATEpointers
+  
   INTEGER(IntKi)                 :: i, i1, i2, i3, i4, i5 
-! 
+  LOGICAL                        :: DEALLOCATEpointers_local
+  INTEGER(IntKi)                 :: ErrStat2
+  CHARACTER(ErrMsgLen)           :: ErrMsg2
+  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyInput'
+
   ErrStat = ErrID_None
   ErrMsg  = ""
+
+  IF (PRESENT(DEALLOCATEpointers)) THEN
+     DEALLOCATEpointers_local = DEALLOCATEpointers
+  ELSE
+     DEALLOCATEpointers_local = .true.
+  END IF
+  
 IF (ALLOCATED(InputData%V_plane)) THEN
   DEALLOCATE(InputData%V_plane)
 ENDIF
@@ -5297,31 +5132,45 @@ IF (ALLOCATED(SrcOutputData%x_plane)) THEN
   END IF
     DstOutputData%x_plane = SrcOutputData%x_plane
 ENDIF
-IF (ALLOCATED(SrcOutputData%k_mt)) THEN
-  i1_l = LBOUND(SrcOutputData%k_mt,1)
-  i1_u = UBOUND(SrcOutputData%k_mt,1)
-  i2_l = LBOUND(SrcOutputData%k_mt,2)
-  i2_u = UBOUND(SrcOutputData%k_mt,2)
-  IF (.NOT. ALLOCATED(DstOutputData%k_mt)) THEN 
-    ALLOCATE(DstOutputData%k_mt(i1_l:i1_u,i2_l:i2_u),STAT=ErrStat2)
+IF (ALLOCATED(SrcOutputData%WAT_k_mt)) THEN
+  i1_l = LBOUND(SrcOutputData%WAT_k_mt,1)
+  i1_u = UBOUND(SrcOutputData%WAT_k_mt,1)
+  i2_l = LBOUND(SrcOutputData%WAT_k_mt,2)
+  i2_u = UBOUND(SrcOutputData%WAT_k_mt,2)
+  i3_l = LBOUND(SrcOutputData%WAT_k_mt,3)
+  i3_u = UBOUND(SrcOutputData%WAT_k_mt,3)
+  IF (.NOT. ALLOCATED(DstOutputData%WAT_k_mt)) THEN 
+    ALLOCATE(DstOutputData%WAT_k_mt(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
     IF (ErrStat2 /= 0) THEN 
-      CALL SetErrStat(ErrID_Fatal, 'Error allocating DstOutputData%k_mt.', ErrStat, ErrMsg,RoutineName)
+      CALL SetErrStat(ErrID_Fatal, 'Error allocating DstOutputData%WAT_k_mt.', ErrStat, ErrMsg,RoutineName)
       RETURN
     END IF
   END IF
-    DstOutputData%k_mt = SrcOutputData%k_mt
+    DstOutputData%WAT_k_mt = SrcOutputData%WAT_k_mt
 ENDIF
  END SUBROUTINE WD_CopyOutput
 
- SUBROUTINE WD_DestroyOutput( OutputData, ErrStat, ErrMsg )
+ SUBROUTINE WD_DestroyOutput( OutputData, ErrStat, ErrMsg, DEALLOCATEpointers )
   TYPE(WD_OutputType), INTENT(INOUT) :: OutputData
   INTEGER(IntKi),  INTENT(  OUT) :: ErrStat
   CHARACTER(*),    INTENT(  OUT) :: ErrMsg
-  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyOutput'
+  LOGICAL,OPTIONAL,INTENT(IN   ) :: DEALLOCATEpointers
+  
   INTEGER(IntKi)                 :: i, i1, i2, i3, i4, i5 
-! 
+  LOGICAL                        :: DEALLOCATEpointers_local
+  INTEGER(IntKi)                 :: ErrStat2
+  CHARACTER(ErrMsgLen)           :: ErrMsg2
+  CHARACTER(*),    PARAMETER :: RoutineName = 'WD_DestroyOutput'
+
   ErrStat = ErrID_None
   ErrMsg  = ""
+
+  IF (PRESENT(DEALLOCATEpointers)) THEN
+     DEALLOCATEpointers_local = DEALLOCATEpointers
+  ELSE
+     DEALLOCATEpointers_local = .true.
+  END IF
+  
 IF (ALLOCATED(OutputData%xhat_plane)) THEN
   DEALLOCATE(OutputData%xhat_plane)
 ENDIF
@@ -5349,8 +5198,8 @@ ENDIF
 IF (ALLOCATED(OutputData%x_plane)) THEN
   DEALLOCATE(OutputData%x_plane)
 ENDIF
-IF (ALLOCATED(OutputData%k_mt)) THEN
-  DEALLOCATE(OutputData%k_mt)
+IF (ALLOCATED(OutputData%WAT_k_mt)) THEN
+  DEALLOCATE(OutputData%WAT_k_mt)
 ENDIF
  END SUBROUTINE WD_DestroyOutput
 
@@ -5434,10 +5283,10 @@ ENDIF
     Int_BufSz   = Int_BufSz   + 2*1  ! x_plane upper/lower bounds for each dimension
       Re_BufSz   = Re_BufSz   + SIZE(InData%x_plane)  ! x_plane
   END IF
-  Int_BufSz   = Int_BufSz   + 1     ! k_mt allocated yes/no
-  IF ( ALLOCATED(InData%k_mt) ) THEN
-    Int_BufSz   = Int_BufSz   + 2*2  ! k_mt upper/lower bounds for each dimension
-      Re_BufSz   = Re_BufSz   + SIZE(InData%k_mt)  ! k_mt
+  Int_BufSz   = Int_BufSz   + 1     ! WAT_k_mt allocated yes/no
+  IF ( ALLOCATED(InData%WAT_k_mt) ) THEN
+    Int_BufSz   = Int_BufSz   + 2*3  ! WAT_k_mt upper/lower bounds for each dimension
+      Re_BufSz   = Re_BufSz   + SIZE(InData%WAT_k_mt)  ! WAT_k_mt
   END IF
   IF ( Re_BufSz  .GT. 0 ) THEN 
      ALLOCATE( ReKiBuf(  Re_BufSz  ), STAT=ErrStat2 )
@@ -5651,23 +5500,28 @@ ENDIF
         Re_Xferred = Re_Xferred + 1
       END DO
   END IF
-  IF ( .NOT. ALLOCATED(InData%k_mt) ) THEN
+  IF ( .NOT. ALLOCATED(InData%WAT_k_mt) ) THEN
     IntKiBuf( Int_Xferred ) = 0
     Int_Xferred = Int_Xferred + 1
   ELSE
     IntKiBuf( Int_Xferred ) = 1
     Int_Xferred = Int_Xferred + 1
-    IntKiBuf( Int_Xferred    ) = LBOUND(InData%k_mt,1)
-    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%k_mt,1)
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%WAT_k_mt,1)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%WAT_k_mt,1)
     Int_Xferred = Int_Xferred + 2
-    IntKiBuf( Int_Xferred    ) = LBOUND(InData%k_mt,2)
-    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%k_mt,2)
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%WAT_k_mt,2)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%WAT_k_mt,2)
+    Int_Xferred = Int_Xferred + 2
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%WAT_k_mt,3)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%WAT_k_mt,3)
     Int_Xferred = Int_Xferred + 2
 
-      DO i2 = LBOUND(InData%k_mt,2), UBOUND(InData%k_mt,2)
-        DO i1 = LBOUND(InData%k_mt,1), UBOUND(InData%k_mt,1)
-          ReKiBuf(Re_Xferred) = InData%k_mt(i1,i2)
-          Re_Xferred = Re_Xferred + 1
+      DO i3 = LBOUND(InData%WAT_k_mt,3), UBOUND(InData%WAT_k_mt,3)
+        DO i2 = LBOUND(InData%WAT_k_mt,2), UBOUND(InData%WAT_k_mt,2)
+          DO i1 = LBOUND(InData%WAT_k_mt,1), UBOUND(InData%WAT_k_mt,1)
+            ReKiBuf(Re_Xferred) = InData%WAT_k_mt(i1,i2,i3)
+            Re_Xferred = Re_Xferred + 1
+          END DO
         END DO
       END DO
   END IF
@@ -5914,7 +5768,7 @@ ENDIF
         Re_Xferred = Re_Xferred + 1
       END DO
   END IF
-  IF ( IntKiBuf( Int_Xferred ) == 0 ) THEN  ! k_mt not allocated
+  IF ( IntKiBuf( Int_Xferred ) == 0 ) THEN  ! WAT_k_mt not allocated
     Int_Xferred = Int_Xferred + 1
   ELSE
     Int_Xferred = Int_Xferred + 1
@@ -5924,16 +5778,21 @@ ENDIF
     i2_l = IntKiBuf( Int_Xferred    )
     i2_u = IntKiBuf( Int_Xferred + 1)
     Int_Xferred = Int_Xferred + 2
-    IF (ALLOCATED(OutData%k_mt)) DEALLOCATE(OutData%k_mt)
-    ALLOCATE(OutData%k_mt(i1_l:i1_u,i2_l:i2_u),STAT=ErrStat2)
+    i3_l = IntKiBuf( Int_Xferred    )
+    i3_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    IF (ALLOCATED(OutData%WAT_k_mt)) DEALLOCATE(OutData%WAT_k_mt)
+    ALLOCATE(OutData%WAT_k_mt(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
     IF (ErrStat2 /= 0) THEN 
-       CALL SetErrStat(ErrID_Fatal, 'Error allocating OutData%k_mt.', ErrStat, ErrMsg,RoutineName)
+       CALL SetErrStat(ErrID_Fatal, 'Error allocating OutData%WAT_k_mt.', ErrStat, ErrMsg,RoutineName)
        RETURN
     END IF
-      DO i2 = LBOUND(OutData%k_mt,2), UBOUND(OutData%k_mt,2)
-        DO i1 = LBOUND(OutData%k_mt,1), UBOUND(OutData%k_mt,1)
-          OutData%k_mt(i1,i2) = ReKiBuf(Re_Xferred)
-          Re_Xferred = Re_Xferred + 1
+      DO i3 = LBOUND(OutData%WAT_k_mt,3), UBOUND(OutData%WAT_k_mt,3)
+        DO i2 = LBOUND(OutData%WAT_k_mt,2), UBOUND(OutData%WAT_k_mt,2)
+          DO i1 = LBOUND(OutData%WAT_k_mt,1), UBOUND(OutData%WAT_k_mt,1)
+            OutData%WAT_k_mt(i1,i2,i3) = ReKiBuf(Re_Xferred)
+            Re_Xferred = Re_Xferred + 1
+          END DO
         END DO
       END DO
   END IF

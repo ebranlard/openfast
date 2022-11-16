@@ -54,9 +54,9 @@ typedef  ^                 WD_InputFileType  IntKi           FilterInit     - - 
 typedef  ^                 WD_InputFileType  ReKi            k_vCurl        - - -  "Calibrated parameter for the eddy viscosity in curled-wake model [>=0.0]" - 
 typedef  ^                 WD_InputFileType  Logical         OutAllPlanes   - - -  "Output all planes" - 
 # wake added turbulence (WAT) inputs
-typedef  ^                 WD_InputFileType  LOGICAL         WkAdT            -  - - "Switch for turning on and off wake-added turbulence" -
-typedef  ^                 WD_InputFileType  ReKi            k_m1_WkAdT       -  - -   "Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.6]" -
-typedef  ^                 WD_InputFileType  ReKi            k_m2_WkAdT       -  - -   "Calibrated parameter for the influence of the radial velocity gradient of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.35]" -
+typedef  ^                 WD_InputFileType  LOGICAL         WAT            -  - - "Switch for turning on and off wake-added turbulence" -
+typedef  ^                 WD_InputFileType  ReKi            WAT_k_Def      -  - - "Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.6]" -
+typedef  ^                 WD_InputFileType  ReKi            WAT_k_Grad     -  - - "Calibrated parameter for the influence of the radial velocity gradient of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.35]" -
 
 
 # ..... Initialization data .......................................................................................................
@@ -96,9 +96,6 @@ typedef ^  DiscreteStateType   ReKi  D_rotor_filt      {:}    - -   "Time-filter
 typedef ^  DiscreteStateType   ReKi  Vx_rel_disk_filt   -     - -   "Time-filtered rotor-disk-averaged relative wind speed (ambient + deficits + motion), normal to disk"      m/s
 typedef ^  DiscreteStateType   ReKi  Ct_azavg_filt     {:}    - -   "Time-filtered azimuthally averaged thrust force coefficient (normal to disk), distributed radially"      -
 typedef ^  DiscreteStateType   ReKi  Cq_azavg_filt     {:}    - -   "Time-filtered azimuthally averaged torque coefficient (normal to disk), distributed radially"      -
-typedef ^  DiscreteStateType   ReKi  Vx_turb           {:}{:}{:} - - "Non-scaled turbulence for each wake plane"      -
-typedef ^  DiscreteStateType   ReKi  Vy_turb           {:}{:}{:} - - "Non-scaled turbulence for each wake plane"      -
-typedef ^  DiscreteStateType   ReKi  Vz_turb           {:}{:}{:} - - "Non-scaled turbulence for each wake plane"      -
 
 # Define constraint states here:
 typedef   ^               ConstraintStateType ReKi     DummyConstrState - - - "Remove this variable if you have constraint states" -
@@ -109,28 +106,30 @@ typedef   ^      OtherStateType               LOGICAL     firstPass          -  
 # ..... Misc/Optimization variables.................................................................................................
 # Define any data that are used only for efficiency purposes (these variables are not associated with time):
 #   e.g. indices for searching in an array, large arrays that are local variables in any routine called multiple times, etc.
-typedef   ^         MiscVarType   ReKi  dvtdr   {:}    - -   ""     
-typedef   ^         MiscVarType   ReKi  vt_tot  {:}{:} - -   ""     
-typedef   ^         MiscVarType   ReKi  vt_amb  {:}{:} - -   ""     
-typedef   ^         MiscVarType   ReKi  vt_shr  {:}{:} - -   ""     
-typedef   ^         MiscVarType   ReKi  vt_tot2 {:}{:}{:} - -   ""     
-typedef   ^         MiscVarType   ReKi  vt_amb2 {:}{:}{:} - -   ""     
-typedef   ^         MiscVarType   ReKi  vt_shr2 {:}{:}{:} - -   ""     
-typedef   ^         MiscVarType   ReKi  dvx_dy  {:}{:}{:} - -   ""     
-typedef   ^         MiscVarType   ReKi  dvx_dz  {:}{:}{:} - -   ""     
-typedef   ^         MiscVarType   ReKi  nu_dvx_dy  {:}{:} - -   ""     
-typedef   ^         MiscVarType   ReKi  nu_dvx_dz  {:}{:} - -   ""     
-typedef   ^         MiscVarType   ReKi  dnuvx_dy   {:}{:} - -   ""     
-typedef   ^         MiscVarType   ReKi  dnuvx_dz   {:}{:} - -   ""     
+typedef   ^         MiscVarType   ReKi  dvtdr   {:}    - -   "Radial gradient of total eddy viscosity (nr)"     
+typedef   ^         MiscVarType   ReKi  vt_tot  {:}{:} - -   "Polar total   eddy viscosity (nr,np)"     
+typedef   ^         MiscVarType   ReKi  vt_amb  {:}{:} - -   "Polar ambient eddy viscosity (nr,np)"      
+typedef   ^         MiscVarType   ReKi  vt_shr  {:}{:} - -   "Polar shear   eddy viscosity (nr,np)"     
+typedef   ^         MiscVarType   ReKi  vt_tot2 {:}{:}{:} - -   "Cartesian total   eddy viscosity (ny,nz,np)"     
+typedef   ^         MiscVarType   ReKi  vt_amb2 {:}{:}{:} - -   "Cartesian ambient eddy viscosity (ny,nz,np)"     
+typedef   ^         MiscVarType   ReKi  vt_shr2 {:}{:}{:} - -   "Cartesian shear   eddy viscosity (ny,nz,np)"     
+typedef   ^         MiscVarType   ReKi  dvx_dy  {:}{:}{:} - -   "Cartesian velocity gradient dVx/dy"     
+typedef   ^         MiscVarType   ReKi  dvx_dz  {:}{:}{:} - -   "Cartesian velocity gradient dVx/dz"     
+typedef   ^         MiscVarType   ReKi  nu_dvx_dy  {:}{:} - -   "Product of total eddy viscosity and gradient"     
+typedef   ^         MiscVarType   ReKi  nu_dvx_dz  {:}{:} - -   "Product of total eddy viscosity and gradient"     
+typedef   ^         MiscVarType   ReKi  dnuvx_dy   {:}{:} - -   "Gradient of nu_dvx_dy wrt y"     
+typedef   ^         MiscVarType   ReKi  dnuvx_dz   {:}{:} - -   "Gradient of nu_dvx_dz wrt z"     
 typedef   ^         MiscVarType   ReKi  a       {:}    - -   ""     
 typedef   ^         MiscVarType   ReKi  b       {:}    - -   ""     
 typedef   ^         MiscVarType   ReKi  c       {:}    - -   ""     
 typedef   ^         MiscVarType   ReKi  d       {:}    - -   "" 
 typedef   ^         MiscVarType   ReKi  r_wake  {:}    - -   ""    
 typedef   ^         MiscVarType   ReKi  Vx_high {:}    - -   ""    
-typedef   ^         MiscVarType   ReKi  Vx_polar {:}    - -   "Vx as function of r for Carteisna implementation"    
-typedef   ^         MiscVarType   ReKi  Vt_wake {:}    - -   "Vx as function of r for Carteisna implementation"    
-typedef   ^             ^         ReKi  k_mt    {:}{:}{:} - -   "Scaling factor k_mt(y,z,x) for wake-added turbulence"    -
+typedef   ^         MiscVarType   ReKi  Vx_polar {:}    - -  "Vx as function of r for Cartesian implementation"    
+typedef   ^         MiscVarType   ReKi  Vt_wake {:}    - -   "Vr as function of r for Cartesian implementation"    
+typedef   ^         MiscVarType   ReKi  GammaCurl  -   - -   "Circulation used in Curled wake model"     
+typedef   ^         MiscVarType   ReKi  Ct_avg     -   - -   "Circulation used in Curled wake model"     
+ 
 
 # ..... Parameters ................................................................................................................
 # Define parameters here:
@@ -148,7 +147,7 @@ typedef ^ ParameterType  Logical          Swirl          - - -    "Switch to add
 typedef ^ ParameterType  ReKi             k_VortexDecay  - - -    "Vortex decay constant for curl" - 
 typedef ^ ParameterType  ReKi             sigma_D        -  - 0.2 "The width of the Gaussian vortices used for the curled wake model divided by diameter"      -
 typedef ^ ParameterType  IntKi            NumVortices    -  - 100 "The number of vortices used for the curled wake model"      -
-typedef ^ ParameterType  ReKi             filtParam      -  - -   "alpha, Low-pass time-filter parameter, with a value between 0 (minimum filtering) and 1 (maximum filtering) (exclusive)"      -
+typedef ^ ParameterType  ReKi             filtParam      -  - -   "Low-pass time-filter parameter, with a value between 0 (minimum filtering) and 1 (maximum filtering) (exclusive)"      -
 typedef ^ ParameterType  ReKi             oneMinusFiltParam - - - "1.0 - filtParam" -
 typedef ^ ParameterType  ReKi             C_HWkDfl_O     -  - -   "Calibrated parameter in the correction for wake deflection defining the horizontal offset at the rotor" m
 typedef ^ ParameterType  ReKi             C_HWkDfl_OY    -  - -   "Calibrated parameter in the correction for wake deflection defining the horizontal offset at the rotor scaled with yaw error" m/rad
@@ -171,11 +170,12 @@ typedef ^ ParameterType  IntKi            FilterInit     - - -    "Switch to fil
 typedef ^ ParameterType  ReKi             k_vCurl        - - -    "Calibrated parameter for the eddy viscosity in curled-wake model [>=0.0]" - 
 typedef ^ ParameterType  Logical          OutAllPlanes   - - -    "Output all planes" - 
 typedef ^ ParameterType  CHARACTER(1024)  OutFileRoot    - - -    "The root name derived from the primary FAST.Farm input file" -
+typedef ^ ParameterType  CHARACTER(1024)  OutFileVTKDir  - - -    "The parent directory for all VTK files written by WD" -
 typedef ^ ParameterType  IntKi            TurbNum        - 0 -    "Turbine ID number (start with 1; end with number of turbines)"      -
 # wake added turbulence (WAT) parameters
-typedef ^ ParameterType  LOGICAL          WkAdT          -  - -   "Switch for turning on and off wake-added turbulence" -
-typedef ^ ParameterType  ReKi             k_m1_WkAdT     -  - -   "Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.6]" -
-typedef ^ ParameterType  ReKi             k_m2_WkAdT     -  - -   "Calibrated parameter for the influence of the radial velocity gradient of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.35]" -
+typedef ^ ParameterType  LOGICAL          WAT            -  - -   "Switch for turning on and off wake-added turbulence" -
+typedef ^ ParameterType  ReKi             WAT_k_Def      -  - -   "Calibrated parameter for the influence of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.6]" -
+typedef ^ ParameterType  ReKi             WAT_k_Grad     -  - -   "Calibrated parameter for the influence of the radial velocity gradient of the wake deficit in the wake-added Turbulence (-) [>=0.0] or DEFAULT [DEFAULT=0.35]" -
 # ..... Inputs ....................................................................................................................
 # Define inputs that are contained on the mesh here:
 typedef      ^      InputType          ReKi       xhat_disk            {3}     -      -      "Orientation of rotor centerline, normal to disk"      -
@@ -196,12 +196,12 @@ typedef      ^      InputType          ReKi       Cq_azavg             {:}     -
 # Define outputs that are contained on the mesh here:
 typedef      ^      OutputType         ReKi       xhat_plane           {:}{:}  -      -      "Orientations of wake planes, normal to wake planes"      -
 typedef      ^      OutputType         ReKi       p_plane              {:}{:}  -      -      "Center positions of wake planes"      m
-typedef      ^      OutputType         ReKi       Vx_wake              {:}{:}  -      -      "TODO Axial wake velocity deficit at wake planes, distributed radially"      m/s
-typedef      ^      OutputType         ReKi       Vr_wake              {:}{:}  -      -      "TODO Radial wake velocity deficit at wake planes, distributed radially"      m/s
+typedef      ^      OutputType         ReKi       Vx_wake              {:}{:}  -      -      "Axial wake velocity deficit at wake planes, distributed radially"      m/s
+typedef      ^      OutputType         ReKi       Vr_wake              {:}{:}  -      -      "Radial wake velocity deficit at wake planes, distributed radially"      m/s
 typedef      ^      OutputType         ReKi       Vx_wake2             {:}{:}{:} -    -      "Axial wake velocity deficit at wake planes, distributed across the plane"      m/s
 typedef      ^      OutputType         ReKi       Vy_wake2             {:}{:}{:} -    -      "Transverse horizontal wake velocity deficit at wake planes, distributed across the plane"      m/s
 typedef      ^      OutputType         ReKi       Vz_wake2             {:}{:}{:} -    -      "Transverse nominally vertical wake velocity deficit at wake planes, distributed across the plane"      m/s
 typedef      ^      OutputType         ReKi       D_wake               {:}     -      -      "Wake diameters at wake planes"     m
 typedef      ^      OutputType         ReKi       x_plane              {:}     -      -      "Downwind distance from rotor to each wake plane"      m
-typedef      ^      OutputType         ReKi       k_mt                 {:}{:}  -      -      "Scaling factor k_mt(r,x) for wake-added turbulence"    -
+typedef      ^      OutputType         ReKi       WAT_k_mt             {:}{:}{:}  -    -      "Scaling factor k_mt(iP,y,z) for wake-added turbulence"    -
 

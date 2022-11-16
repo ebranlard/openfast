@@ -399,30 +399,22 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
    type(WD_InitOutputType),      intent(  out) :: InitOut       !< Output for initialization routine
    integer(IntKi),               intent(  out) :: errStat       !< Error status of the operation
    character(*),                 intent(  out) :: errMsg        !< Error message if errStat /= ErrID_None
-   
-
       ! Local variables
    integer(IntKi)                              :: i             ! loop counter
-   
+   character(1024)                             :: rootDir
+   character(1024)                             :: basename
    integer(IntKi)                              :: errStat2      ! temporary error status of the operation
    character(ErrMsgLen)                        :: errMsg2       ! temporary error message 
    character(*), parameter                     :: RoutineName = 'WD_Init'
    
-   
       ! Initialize variables for this routine
-
-   call WD_TEST_AddVelocityCurl() ! Temporary hack
-
    errStat = ErrID_None
    errMsg  = ""
   
       ! Initialize the NWTC Subroutine Library
-
    call NWTC_Init( EchoLibVer=.FALSE. )
 
-   
       ! Display the module information
-
    if (InitInp%TurbNum <= 1) call DispNVD( WD_Ver )       
       
       ! Validate the initialization inputs
@@ -458,6 +450,7 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
    p%k_vShr        = InitInp%InputFileData%k_vShr      
    p%Mod_WakeDiam  = InitInp%InputFileData%Mod_WakeDiam
    p%C_WakeDiam    = InitInp%InputFileData%C_WakeDiam  
+   ! Curl variables
    p%Swirl         = InitInp%InputFileData%Swirl  
    p%k_VortexDecay = InitInp%InputFileData%k_VortexDecay 
    p%NumVortices   = InitInp%InputFileData%NumVortices 
@@ -466,9 +459,9 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
    p%k_vCurl       = InitInp%InputFileData%k_vCurl  
    p%OutAllPlanes  = InitInp%InputFileData%OutAllPlanes  
    ! Wake-Added Turbulence (WAT) variables
-   p%WkAdT         = InitInp%InputFileData%WkAdT  
-   p%k_m1_WkAdT    = InitInp%InputFileData%k_m1_WkAdT  
-   p%k_m2_WkAdT    = InitInp%InputFileData%k_m2_WkAdT
+   p%WAT           = InitInp%InputFileData%WAT  
+   p%WAT_k_Def     = InitInp%InputFileData%WAT_k_Def  
+   p%WAT_k_Grad    = InitInp%InputFileData%WAT_k_Grad
    
    ! Finite difference grid coordinates r, y, z
    allocate( p%r(0:p%NumRadii-1),stat=errStat2)
@@ -476,7 +469,6 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
    allocate(p%y(-p%NumRadii+1:p%NumRadii-1), stat=errStat2); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for p%y.', errStat, errMsg, RoutineName )
    allocate(p%z(-p%NumRadii+1:p%NumRadii-1), stat=errStat2); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for p%z.', errStat, errMsg, RoutineName )
    if (errStat /= ErrID_None) return
-      
    do i = 0,p%NumRadii-1
       p%r(i)       = p%dr*i     
    end do
@@ -484,10 +476,15 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
       p%y(i)       = p%dr*i     
       p%z(i)       = p%dr*i     
    end do
+
+   ! Path for VTK outputs
+   call GetPath( p%OutFileRoot, rootDir, baseName ) 
+   p%OutFileVTKDir = trim(rootDir) // 'vtk_ff_planes'
+
+
    
    p%filtParam         = exp(-2.0_ReKi*pi*p%dt_low*InitInp%InputFileData%f_c)
    p%oneMinusFiltParam = 1.0_ReKi - p%filtParam
-
       !............................................................................................
       ! Define and initialize inputs here 
       !............................................................................................
@@ -500,12 +497,23 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
       if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for u%Cq_azavg.', errStat, errMsg, RoutineName )   
    if (errStat /= ErrID_None) return
    
+
+         
+      
+      !............................................................................................
+      ! Define outputs here
+      !............................................................................................
+
+   
+   
       !............................................................................................
       ! Initialize states and misc vars : Note these are not the correct initializations because
       ! that would require valid input data, which we do not have here.  Instead we will check for
       ! an firstPass flag on the miscVars and if it is false we will properly initialize these state
       ! in CalcOutput or UpdateStates, as necessary.
       !............................................................................................
+   x%DummyContState   = 0.0_ReKi
+   z%DummyConstrState = 0.0_ReKi
       
    allocate ( xd%xhat_plane       (3, 0:p%NumPlanes-1) , STAT=ErrStat2 )
       if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for xd%xhat_plane.', errStat, errMsg, RoutineName )   
@@ -533,23 +541,9 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
    if (errStat /= ErrID_None) return
 
    ! Curl
-   if (p%Mod_Wake == Mod_Wake_Cartesian .or. p%Mod_Wake == Mod_Wake_Curl) then
-      allocate ( xd%Vy_wake2   (-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1,0:p%NumPlanes-1), STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for xd%Vy_wake.', errStat, errMsg, RoutineName )  
-      allocate ( xd%Vz_wake2   (-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1,0:p%NumPlanes-1), STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for xd%Vz_wake.', errStat, errMsg, RoutineName )  
-      if (errStat /= ErrID_None) return
-      xd%Vy_wake2 = 0.0_ReKi
-      xd%Vz_wake2 = 0.0_ReKi
-   endif
-   ! WAT
-   if (p%WkAdT) then
-      allocate ( xd%Vx_turb    (-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1,0:p%NumPlanes-1), STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for xd%Vx_turb.', errStat, errMsg, RoutineName )  
-      allocate ( xd%Vy_turb    (-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1,0:p%NumPlanes-1), STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for xd%Vy_turb.', errStat, errMsg, RoutineName )  
-      allocate ( xd%Vz_turb    (-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1,0:p%NumPlanes-1), STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for xd%Vz_turb.', errStat, errMsg, RoutineName )  
-      if (errStat /= ErrID_None) return
-      xd%Vx_turb = 0.0_ReKi
-      xd%Vy_turb = 0.0_ReKi
-      xd%Vz_turb = 0.0_ReKi
-   endif
+   allocate ( xd%Vy_wake2   (-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1,0:p%NumPlanes-1), STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for xd%Vy_wake.', errStat, errMsg, RoutineName )  
+   allocate ( xd%Vz_wake2   (-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1,0:p%NumPlanes-1), STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for xd%Vz_wake.', errStat, errMsg, RoutineName )  
+   if (errStat /= ErrID_None) return
 
    xd%YawErr_filt         = 0.0_ReKi !NOTE: initialized in InitStatesWithInputs
    xd%psi_skew_filt       = 0.0_ReKi !NOTE: initialized in InitStatesWithInputs
@@ -571,25 +565,27 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
    OtherState%firstPass            = .true.     
    
       ! miscvars to avoid the allocation per timestep
+      ! Cartesian eddy viscosity (allocated even for polar if plane outputs are requested)
+   allocate (   m%vt_tot2(-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1,0:p%NumPlanes-1), STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%vt_tot2.', errStat, errMsg, RoutineName )  
+   allocate (   m%vt_amb2(-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1,0:p%NumPlanes-1), STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%vt_amb2.', errStat, errMsg, RoutineName )  
+   allocate (   m%vt_shr2(-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1,0:p%NumPlanes-1), STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%vt_shr2.', errStat, errMsg, RoutineName )  
+   if (errStat /= ErrID_None) return
+   m%vt_tot2   = 0.0_ReKi
+   m%vt_amb2   = 0.0_ReKi
+   m%vt_shr2   = 0.0_ReKi
    if (p%Mod_Wake == Mod_Wake_Polar) then
       allocate (   m%dvtdr  (0:p%NumRadii-1 ) , STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%dvtdr.', errStat, errMsg, RoutineName )  
       allocate (   m%vt_tot (0:p%NumRadii-1,0:p%NumPlanes-1 ) , STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%vt_tot.', errStat, errMsg, RoutineName )  
       allocate (   m%vt_amb (0:p%NumRadii-1,0:p%NumPlanes-1 ) , STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%vt_amb.', errStat, errMsg, RoutineName )  
       allocate (   m%vt_shr (0:p%NumRadii-1,0:p%NumPlanes-1 ) , STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%vt_shr.', errStat, errMsg, RoutineName )  
    else if (p%Mod_Wake == Mod_Wake_Cartesian .or. p%Mod_Wake == Mod_Wake_Curl) then
-      allocate (   m%vt_tot2(-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1,0:p%NumPlanes-1), STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%vt_tot2.', errStat, errMsg, RoutineName )  
-      allocate (   m%vt_amb2(-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1,0:p%NumPlanes-1), STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%vt_amb2.', errStat, errMsg, RoutineName )  
-      allocate (   m%vt_shr2(-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1,0:p%NumPlanes-1), STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%vt_shr2.', errStat, errMsg, RoutineName )  
-
       allocate (   m%dvx_dy   (-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1,0:p%NumPlanes-1), STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%dvx_dy.', errStat, errMsg, RoutineName )  
       allocate (   m%dvx_dz   (-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1,0:p%NumPlanes-1), STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%dvx_dz.', errStat, errMsg, RoutineName )  
       allocate (   m%nu_dvx_dy(-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1), STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%nu_dvx_dy.', errStat, errMsg, RoutineName )  
       allocate (   m%nu_dvx_dz(-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1), STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%nu_dvx_dz.', errStat, errMsg, RoutineName )  
       allocate (   m%dnuvx_dy (-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1), STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%dnuvx_dy.', errStat, errMsg, RoutineName )  
       allocate (   m%dnuvx_dz (-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1), STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%dnuvx_dz.', errStat, errMsg, RoutineName )  
-      m%vt_tot2   = 0.0_ReKi
-      m%vt_amb2   = 0.0_ReKi
-      m%vt_shr2   = 0.0_ReKi
+      if (errStat /= ErrID_None) return
       m%dvx_dy    = 0.0_ReKi
       m%dvx_dz    = 0.0_ReKi
       m%nu_dvx_dy = 0.0_ReKi
@@ -599,8 +595,6 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
    else
       STOP ! should never happen
    endif
-   allocate ( m%k_mt   (-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1,0:p%NumPlanes-1), STAT=ErrStat2 ); if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%k_mt.', errStat, errMsg, RoutineName )  
-   m%k_mt = 0.0_ReKi 
 
 
    allocate (    m%a(0:p%NumRadii-1 ) , STAT=ErrStat2 )
@@ -620,6 +614,8 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
    allocate (    m%Vx_polar(0:p%NumRadii-1 ) , STAT=ErrStat2 )
       if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for m%Vx_polar.', errStat, errMsg, RoutineName )  
    if (errStat /= ErrID_None) return
+   m%Vx_polar = 0.0_ReKi
+   m%Vt_wake = 0.0_ReKi
       !............................................................................................
       ! Define initialization output here
       !............................................................................................
@@ -630,7 +626,6 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
       if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for y%xhat_plane.', errStat, errMsg, RoutineName )     
    allocate ( y%p_plane   (3,0:p%NumPlanes-1), STAT=ErrStat2 )
       if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for y%p_plane.', errStat, errMsg, RoutineName )  
-   ! TODO consider renaming these variables to "polar", and place in misc. Kept for now, might be needed for radial outputs
    allocate ( y%Vx_wake   (0:p%NumRadii-1,0:p%NumPlanes-1), STAT=ErrStat2 )
       if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for y%Vx_wake.', errStat, errMsg, RoutineName )  
    allocate ( y%Vr_wake   (0:p%NumRadii-1,0:p%NumPlanes-1), STAT=ErrStat2 )
@@ -644,8 +639,8 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
       if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for y%D_wake.', errStat, errMsg, RoutineName )  
    allocate ( y%x_plane   (0:p%NumPlanes-1), STAT=ErrStat2 )
       if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for y%x_plane.', errStat, errMsg, RoutineName )  
-   allocate ( y%k_mt        (0:p%NumRadii-1, 0:p%NumPlanes-1 ) , STAT=ErrStat2 )
-      if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for y%k_mt.', errStat, errMsg, RoutineName )  
+   allocate ( y%WAT_k_mt (-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1,0:p%NumPlanes-1), STAT=ErrStat2 )
+      if (errStat2 /= 0) call SetErrStat ( ErrID_Fatal, 'Could not allocate memory for y%WAT_k_mt.', errStat, errMsg, RoutineName )  
    if (errStat /= ErrID_None) return
    
    y%xhat_plane = 0.0_Reki
@@ -657,7 +652,7 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
    y%Vz_wake2   = 0.0_Reki
    y%D_wake     = 0.0_Reki
    y%x_plane    = 0.0_Reki
-   y%k_mt       = 0.0_Reki
+   y%WAT_k_mt   = 0.0_Reki
       
 end subroutine WD_Init
 
@@ -751,12 +746,10 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
    real(ReKi)                                   :: dvdr, r_tmp, C, S, dvdtheta_r
    integer(intKi)                               :: i,j, maxPln
    integer(intKi)                               :: iy, iz            ! indices on y and z
-   real(ReKi)                                   :: Ct_avg            ! Rotor-disk averaged Ct
    real(ReKi)                                   :: vt_min            ! Minimum Eddy viscosity
 
    errStat = ErrID_None
    errMsg  = ""
-   
    
    if ( EqualRealNos(u%D_Rotor,0.0_ReKi) .or. u%D_Rotor < 0.0_ReKi ) then
       ! TEST: E7
@@ -886,30 +879,18 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
             call Cleanup()
             return
          end if
-      ! OLD
-!~       dx = dot_product(xd%xhat_plane(:,i-1),xd%V_plane_filt(:,i-1))*p%DT_low
-!~       xd%p_plane        (:,i) =  xd%p_plane(:,i-1) + &
-!~                                  xd%xhat_plane(:,i-1)*dx + dy_HWkDfl &
-!~                               + ( u%V_plane(:,i-1) - xd%xhat_plane(:,i-1)*dot_product(xd%xhat_plane(:,i-1),u%V_plane(:,i-1)) )*p%DT_low
-      ! NEW
-      xd%p_plane        (:,i) =  xd%p_plane(:,i-1) + u%V_Plane(:,i-1)       * p%DT_low + dy_HWkDfl 
-!~       xd%p_plane        (:,i) =  xd%p_plane(:,i-1) + xd%V_Plane_filt(:,i-1) * p%DT_low + dy_HWkDfl                       
+      ! Old convection
+      !xd%p_plane        (:,i) =  xd%p_plane(:,i-1) + xd%xhat_plane(:,i-1)*dx + dy_HWkDfl &
+      !                        + ( u%V_plane(:,i-1) - xd%xhat_plane(:,i-1)*dot_product(xd%xhat_plane(:,i-1),u%V_plane(:,i-1)) )*p%DT_low
+      ! New convection model (dx = V * dt)
+      xd%p_plane        (:,i) =  xd%p_plane(:,i-1) + u%V_Plane(:,i-1) * p%DT_low + dy_HWkDfl 
       
       xd%Vx_wind_disk_filt(i) = xd%Vx_wind_disk_filt(i-1)
       xd%TI_amb_filt      (i) = xd%TI_amb_filt(i-1)
       xd%D_rotor_filt     (i) = xd%D_rotor_filt(i-1)
 
    end do ! loop on planes i = maxPln+1, 1, -1
-
-   ! WAT, transfer of turb for all "free" planes
-   if ( p%WkAdT ) then
-      do i = maxPln, 1, -1  
-         xd%Vx_turb(:,:,i) = xd%Vx_turb(:,:,i-1)
-         xd%Vy_turb(:,:,i) = xd%Vy_turb(:,:,i-1)
-         xd%Vz_turb(:,:,i) = xd%Vz_turb(:,:,i-1)
-      end do ! loop on planes i = maxPln+1, 1, -1
-   endif
-    
+      
    ! --------------------------------------------------------------------------------
    ! --- Update states at disk-plane (0) to time [n+1] 
    ! --------------------------------------------------------------------------------
@@ -924,9 +905,7 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
    end if
    xd%xhat_plane     (:,0) =  xd%xhat_plane(:,0) / norm2_xhat_plane
    
-   xd%psi_skew_filt        =  filter_angles(xd%psi_skew_filt, u%psi_skew, p%filtParam, p%oneMinusFiltParam)
-   xd%chi_skew_filt        =  xd%chi_skew_filt *p%filtParam + u%chi_skew*p%oneMinusFiltParam
-   !call filter_angles2(xd%psi_skew_filt, xd%chi_skew_filt, u%psi_skew, u%chi_skew, p%filtParam, p%oneMinusFiltParam)
+   call filter_angles2(xd%psi_skew_filt, xd%chi_skew_filt, u%psi_skew, u%chi_skew, p%filtParam, p%oneMinusFiltParam)
    
    xd%YawErr_filt      (0) =  xd%YawErr_filt(0)*p%filtParam + u%YawErr  *p%oneMinusFiltParam
   
@@ -959,10 +938,12 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
    xd%Cq_azavg_filt (:) = xd%Cq_azavg_filt(:)*p%filtParam + u%Cq_azavg(:)*p%oneMinusFiltParam
    
    ! --- Set velocity at disk plane
+   m%GammaCurl = 0.0_ReKi ! Storing for outputs
+   m%Ct_avg    = 0.0_ReKi ! Storing for outputs
    if (p%Mod_Wake == Mod_Wake_Polar) then
 
       ! Compute wake deficit of first plane based on rotor loading, outputs: Vx_Wake, m
-      call NearWakeCorrection( xd%Ct_azavg_filt, xd%Cq_azavg_filt, xd%Vx_rel_disk_filt, p, m, xd%Vx_wake(:,0), m%Vt_wake, xd%D_rotor_filt(0), errStat, errMsg )
+       call NearWakeCorrection( xd%Ct_azavg_filt, xd%Cq_azavg_filt, xd%Vx_rel_disk_filt, p, m, xd%Vx_wake(:,0), m%Vt_wake, xd%D_rotor_filt(0), errStat, errMsg )
 
    else if (p%Mod_Wake == Mod_Wake_Cartesian .or. p%Mod_Wake == Mod_Wake_Curl) then
 
@@ -977,25 +958,17 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
       ! Convert to Cartesian
       call Axisymmetric2CartesianVx(m%Vx_polar, p%r, p%y, p%z, xd%Vx_wake2(:,:,0))
       call FilterVx(xd%Vx_wake2(:,:,0), p%FilterInit) ! don't filter if FilterInit is 0
-      !call Axisymmetric2CartesianVx(m%Vx_polar * sin(xd%chi_skew_filt), p%r, p%y, p%z, xd%Vy_wake2(:,:,0))
-      !xd%Vy_wake2(:,:,0) = xd%Vx_wake2(:,:,0) * sin(xd%chi_skew_filt)
-      Ct_avg =  get_Ctavg(p%r, xd%Ct_azavg_filt, xd%D_rotor_filt(0))
-      ! --- Compute Vy
+      m%Ct_avg =  get_Ctavg(p%r, xd%Ct_azavg_filt, xd%D_rotor_filt(0))
       ! --- Add V/W from vorticies 
       if (p%Mod_Wake == Mod_Wake_Curl) then
          call AddVelocityCurl(xd%Vx_wind_disk_filt(0), xd%chi_skew_filt, p%NumVortices, xd%D_Rotor_filt(0)/2., &
-                           xd%psi_skew_filt, p%y, p%z, Ct_avg, p%sigma_D, xd%Vy_wake2(:,:,0), xd%Vz_wake2(:,:,0))
+                           xd%psi_skew_filt, p%y, p%z, m%Ct_avg, p%sigma_D, xd%Vy_wake2(:,:,0), xd%Vz_wake2(:,:,0), m%GammaCurl)
 
       endif
       ! --- Add Swirl
       if (p%Swirl) then
          call AddSwirl(p%r, m%Vt_wake, p%y, p%z, xd%Vy_wake2(:,:,0), xd%Vz_wake2(:,:,0))
       endif
-   endif
-
-   ! --- WAT - Store turbulence for initial plane
-   if ( p%WkAdT ) then
-      call TurbPlane(xd%Vx_wind_disk_filt(0), t, p%NumRadii, xd%Vx_turb(:,:,0), xd%Vy_turb(:,:,0), xd%Vz_turb(:,:,0))
    endif
 
    !Used for debugging: write(51,'(I5,100(1x,ES10.2E2))') n, xd%x_plane(n), xd%x_plane(n)/xd%D_rotor_filt(n), xd%Vx_wind_disk_filt(n) + xd%Vx_wake(:,n), xd%Vr_wake(:,n)    
@@ -1098,27 +1071,13 @@ contains
 
                ! Eddy viscosity term
                divTau = m%dnuvx_dy(iy,iz) + m%dnuvx_dz(iy,iz)
-               !divTau = 0.1 * (xd%Vx_wake2(iy+1,iz,i-1) - 2. * xd%Vx_wake2(iy,iz,i-1) + xd%Vx_wake2(iy-1,iz,i-1) &
-               !              + xd%Vx_wake2(iy,iz+1,i-1) - 2. * xd%Vx_wake2(iy,iz,i-1) + xd%Vx_wake2(iy,iz-1,i-1)) / (p%dr**2)
-               
                ! Update state of Vx
                xd%Vx_wake2(iy,iz,i) = xd%Vx_wake2(iy,iz,i-1) -  &
                       p%DT_low * ( & 
-!~ (xd%Vx_wake2(iy,iz,i-1) + xd%Vx_wind_disk_filt(i-1) - xd%xhat_plane(1,i-1)*dot_product(xd%xhat_plane(:,i-1),u%V_plane(:,i-1)))  - &
-!~                                          ( (xd%Vy_wake2(iy,iz,i-1) - V_mean_yz(2) ) * m%dvx_dy(iy,iz,i-1) + &
-!~                                            (xd%Vz_wake2(iy,iz,i-1) - V_mean_yz(3) ) * m%dvx_dz(iy,iz,i-1) &
                                          ( (xd%Vy_wake2(iy,iz,i-1) ) * m%dvx_dy(iy,iz,i-1) + &
                                            (xd%Vz_wake2(iy,iz,i-1) ) * m%dvx_dz(iy,iz,i-1) &
                                          - divTau) &
                                          ) 
-
-!              ! Update state of Vx OLD
-!              xd%Vx_wake2(iy,iz,i) = xd%Vx_wake2(iy,iz,i-1) -  &
-!                                     dx / (xd%Vx_wake2(iy,iz,i-1) + xd%Vx_wind_disk_filt(i-1)) * &
-!                                        ((xd%Vy_wake2(iy,iz,i-1)) * m%dvx_dy(iy,iz,i-1) + &
-!                                         xd%Vz_wake2(iy,iz,i-1) * m%dvx_dz(iy,iz,i-1) &
-!                                        - divTau) 
-
                ! Update state (decay) of Vy and Vz
                xd%Vy_wake2(iy,iz,i)  = xd%Vy_wake2(iy,iz,i-1) * exp( - p%k_VortexDecay * dx)
                xd%Vz_wake2(iy,iz,i)  = xd%Vz_wake2(iy,iz,i-1) * exp( - p%k_VortexDecay * dx)
@@ -1178,10 +1137,10 @@ subroutine lamb_oseen_2d(y, z, Gamma, sigma, v, w)
    v =  Gamma / (2. * pi) * z / (y**2 + z**2 + 1.e-5) * (1. - exp(-(y**2 + z**2)/(sigma**2) ))
    w = -Gamma / (2. * pi) * y / (y**2 + z**2 + 1.e-5) * (1. - exp(-(y**2 + z**2)/(sigma**2) ))
 
-end subroutine
+end subroutine lamb_oseen_2d
 
 ! A subroutine to compute the spanwise velocities from curl
-subroutine AddVelocityCurl(Vx, yaw_angle, nVortex, R, psi_skew, y, z, Ct_avg, sigma_d, Vy_curl, Vz_curl)
+subroutine AddVelocityCurl(Vx, yaw_angle, nVortex, R, psi_skew, y, z, Ct_avg, sigma_d, Vy_curl, Vz_curl, Gamma0)
  
    real(ReKi), intent(in) :: Vx                         ! The inflow velocity
    real(ReKi), intent(in) :: yaw_angle                  ! The yaw angle (rad)
@@ -1194,7 +1153,8 @@ subroutine AddVelocityCurl(Vx, yaw_angle, nVortex, R, psi_skew, y, z, Ct_avg, si
    real(ReKi),                 intent(in)    :: sigma_d ! The width of Gaussian kernel for the vortices divided by diameter (-)
    real(ReKi), dimension(:,:), intent(inout) :: Vy_curl ! Curl velocity in the y direction (m/s)
    real(ReKi), dimension(:,:), intent(inout) :: Vz_curl ! Curl velocity in the z direction (m/s)
-   real(ReKi) Gamma0, dR, G, zp, y0, z0, v, w, sigma, w_mean, v_mean
+   real(ReKi)                , intent(  out) :: Gamma0  ! Circulation used
+   real(ReKi) dR, G, zp, y0, z0, v, w, sigma, w_mean, v_mean
    integer(intKi) ir, iy, iz, iIn
    
    ! The width of the Guassian vortices
@@ -1205,7 +1165,7 @@ subroutine AddVelocityCurl(Vx, yaw_angle, nVortex, R, psi_skew, y, z, Ct_avg, si
      
    ! Compute the Ct
    ! Add another cosine term to project the vortices
-   Gamma0 = -R * Vx * Ct_avg * sin(yaw_angle) * cos(yaw_angle) 
+   Gamma0 =  R * Vx * Ct_avg * sin(yaw_angle) * cos(yaw_angle) 
 
    ! Loop through all the points
    do ir = 2, nVortex-1
@@ -1251,7 +1211,7 @@ subroutine AddVelocityCurl(Vx, yaw_angle, nVortex, R, psi_skew, y, z, Ct_avg, si
       Vz_curl(:, :) = Vz_curl(:, :) - w_mean
    endif
 
-end subroutine
+end subroutine AddVelocityCurl
 
 
 !> This subroutine computes the near wake correction : Vx_wake  
@@ -1292,40 +1252,6 @@ subroutine AddSwirl(r, Vt_wake, y, z, Vy_curl, Vz_curl)
    
 end subroutine AddSwirl
 
-!> Compute non-scaled turbulence at a given plane based on a Mann Box, current time, and convection velocity of the box
-subroutine TurbPlane(Uconv, t, nr, u_p, v_p, w_p)
-   integer(IntKi),                               intent(in)  :: nr    !< Number of radius in wake plane
-   !real(ReKi), dimension(0:,0:,0:), pointer,    intent(in)  :: u_b   !< TODO turbulence box
-   real(ReKi),                                   intent(in)  :: Uconv !< Convection velocity of the box
-   real(DbKi),                                   intent(in)  :: t     !< Current time
-   real(ReKi), dimension(-nr+1:nr+1,-nr+1:nr+1), intent(out) :: u_p   !< Plane to be filled with turbulence values, shape
-   real(ReKi), dimension(-nr+1:nr+1,-nr+1:nr+1), intent(out) :: v_p   !< Plane to be filled with turbulence values, shape
-   real(ReKi), dimension(-nr+1:nr+1,-nr+1:nr+1), intent(out) :: w_p   !< Plane to be filled with turbulence values, shape
-   integer(IntKi) :: iz, iy ! indices in plane coordinates
-   integer(IntKi) :: ix_b, iy_b, iz_b, ib0, nb  ! Indices in box coordinates
-
-   !nb = size(u_b, 1)
-   nb=2 ! TODO
-   ib0 = int(nb/2)-1 ! NOTE: nb is multiple of 2
-
-   ! Interpolate time
-   ! TODO use Uconv/t to find ix_b
-
-   ! Loop through all plane points
-   do iz = -nr+1, nr-1
-      iz_b = modulo(ib0 + iz, nb) ! NOTE: assumes that turbulene box has indexing starting from 0
-      do iy = -nr+1, nr-1
-         iy_b = modulo(ib0 + iz, nb)
-         u_p(iy,iz) = 0.0_ReKi
-         v_p(iy,iz) = 0.0_ReKi
-         w_p(iy,iz) = 0.0_ReKi
-         !u_b = u_b(iy_b, iz_b, ix_b) ! TODO
-      enddo
-   enddo
-   
-end subroutine 
-
-
 !> Test the curled wake velocity curl function
 subroutine WD_TEST_AddVelocityCurl()
   
@@ -1335,23 +1261,17 @@ subroutine WD_TEST_AddVelocityCurl()
    real(ReKi) :: Vz_curl_ref(2,2)
    real(ReKi) :: y(2)=(/ 0., 2./)
    real(ReKi) :: z(2)=(/-1.,1./)
+   real(ReKi) :: Gamma0
 
    call AddVelocityCurl(Vx=10., yaw_angle=0.1, nVortex=100, R=63., psi_skew=0.2, &
-      y=y, z=z, Ct_avg=0.7, sigma_d=0.2, Vy_curl=Vy_curl, Vz_curl=Vz_curl)
+      y=y, z=z, Ct_avg=0.7, sigma_d=0.2, Vy_curl=Vy_curl, Vz_curl=Vz_curl, Gamma0=Gamma0)
 
-   if (abs(Vy_curl(1,1)-0.2171091922)>1e-5) then
+   if (abs(Vy_curl(1,1)+0.217109)>1e-4) then
       print*,'Test fail for vy'
       !STOP
    endif
-   if (abs(Vz_curl(2,2)-4.45974602276e-2)>1e-5) then
-      print*,'>>>>>>>>>>>>>> Test fail for vz'
-      print*,'>>>>>>>>>>>>>> Test fail for vz'
-      print*,'>>>>>>>>>>>>>> Test fail for vz'
-      print*,'>>>>>>>>>>>>>> Test fail for vz'
-      print*,'>>>>>>>>>>>>>> Test fail for vz'
-      print*,'>>>>>>>>>>>>>> Test fail for vz'
-      print*,'>>>>>>>>>>>>>> Test fail for vz'
-      print*,'>>>>>>>>>>>>>> Test fail for vz'
+   if (abs(Vz_curl(2,2)+4.459746e-2)>1e-4) then
+      print*,'>>> Test fail for vz'
       !STOP
    endif
 end subroutine
@@ -1379,7 +1299,7 @@ subroutine filter_angles2(psi_filt, chi_filt, psi, chi, alpha, alpha_bar)
    errStat = ErrID_None
    errMsg  = ""
    
-   print*,'Input     ', psi_filt, chi_filt
+   !print*,'Input     ', psi_filt, chi_filt
    ! Compute the DCMs of the skew-related inputs and filtered states:
    DCM1 = EulerConstruct( (/ psi_filt, 0.0_ReKi, chi_filt /) )
    DCM2 = EulerConstruct( (/ psi, 0.0_ReKi, chi /) )
@@ -1394,31 +1314,15 @@ subroutine filter_angles2(psi_filt, chi_filt, psi, chi, alpha, alpha_bar)
    DCM_interp = DCM_exp( lambda_interp )
    !Convert back to angles:
    theta_out = EulerExtract( DCM_interp )
-   print*,'Output Old',filter_angles(psi_filt, psi, alpha, alpha_bar),filter_angles(chi_filt, chi, alpha, alpha_bar)
+   !print*,'Output Old',filter_angles(psi_filt, psi, alpha, alpha_bar),filter_angles(chi_filt, chi, alpha, alpha_bar)
    psi_filt = theta_out(1)
    chi_filt = theta_out(3)
-   print*,'Output    ', psi_filt, chi_filt, theta_out(2)
+   !print*,'Output    ', psi_filt, chi_filt, theta_out(2)
 end subroutine filter_angles2
-
-!> Weighted average of two angles
-function filter_angles(t1, t2, alpha, alpha_bar) result (t_filt)
-   real(ReKi), intent(in) :: t1 !< Angle 1
-   real(ReKi), intent(in) :: t2 !< Angle 2
-   real(ReKi), intent(in) :: alpha     !< filter weight
-   real(ReKi), intent(in) :: alpha_bar !< 1-alpha
-   real(ReKi) :: t_filt !< output
-   real(ReKi) :: x,y
-   ! exp(i t1 alpha)* exp(i t2 alpha_bar ) = exp( i [ t1 alpha + (1-alpha) t2] )
-   ! alpha exp(i t1) + alpha_bar exp(i t2)
-   x = alpha*cos(t1)+alpha_bar*cos(t2)
-   y = alpha*sin(t1)+alpha_bar*sin(t2)
-   t_filt = atan2(y,x) 
-end function filter_angles
-
 
 
 !> Converts velocity vectors from an axisymmetric system in radial coordinates to a Cartesian system in Cartesian coordinates
-subroutine Axisymmetric2Cartesian(Vx_axi, Vr_axi, r, y, z, Vx, Vy, Vz)
+subroutine Axisymmetric2CartesianVel(Vx_axi, Vr_axi, r, y, z, Vx, Vy, Vz)
    real(ReKi), dimension(:),   intent(in)    :: Vx_axi !< Axial velocity, distributed radially (m/s)
    real(ReKi), dimension(:),   intent(in)    :: Vr_axi !< Radial velocity deficit, distributed radially (m/s)
    real(ReKi), dimension(:),   intent(in)    :: r      !< Discretization of radial finite-difference grid (m
@@ -1448,6 +1352,31 @@ subroutine Axisymmetric2Cartesian(Vx_axi, Vr_axi, r, y, z, Vx, Vy, Vz)
          Vr        = InterpBin(r_tmp, r, Vr_axi, iLow, nr)
          Vy(iy,iz) = Vr * C
          Vz(iy,iz) = Vr * S
+      enddo
+   enddo
+end subroutine Axisymmetric2CartesianVel
+
+!> Converts scalar polar field from an axisymmetric system in radial coordinates to a Cartesian system in Cartesian coordinates
+!! Values outside of the max radius are set to 0
+subroutine Axisymmetric2Cartesian(f_axi, r, y, z, f_cart)
+   real(ReKi), dimension(:),   intent(in)    :: f_axi  !< Polar field, f(r), distributed radially (misc)
+   real(ReKi), dimension(:),   intent(in)    :: r      !< Discretization of radial finite-difference grid (m
+   real(ReKi), dimension(:),   intent(in)    :: y      !< Horizontal discretization of Cartesian grid (m)
+   real(ReKi), dimension(:),   intent(in)    :: z      !< Nominally vertical discretization of Cartesian grid (m)
+   real(ReKi), dimension(:,:), intent(inout) :: f_cart !< Cartesian field, f(x,y)  (misc)
+   integer(IntKi) :: iz, iy, nr, iLow
+   real(ReKi) :: r_tmp, r_max
+   nr = size(r)
+   r_max = r(nr)
+   do iz = 1,size(z)
+      do iy = 1,size(y)
+         r_tmp =  sqrt(y(iy)**2 + z(iz)**2) 
+         if (r_tmp<=r_max) then
+            iLow=0
+            f_cart(iy,iz) = InterpBin(r_tmp, r, f_axi, iLow, nr) !( XVal, XAry, YAry, ILo, AryLen )
+         else
+            f_cart(iy,iz) = 0.0_ReKi
+         endif
       enddo
    enddo
 end subroutine Axisymmetric2Cartesian
@@ -1522,7 +1451,7 @@ subroutine WD_TEST_Axi2Cart()
    real(ReKi) :: Vr, r_tmp
    Vr_axi=4._ReKi*r
    Vx_axi=3._ReKi*r
-   call Axisymmetric2Cartesian(Vx_axi, Vr_axi, r, y, z, Vx, Vy, Vz)
+   call Axisymmetric2CartesianVel(Vx_axi, Vr_axi, r, y, z, Vx, Vy, Vz)
 
    do i = 1,size(y)
       do j = 1,size(z)
@@ -1574,10 +1503,8 @@ subroutine WD_CalcOutput( t, u, p, x, xd, z, OtherState, y, m, errStat, errMsg )
    character(ErrMsgLen)                         :: ErrMsg2
    character(*), parameter                      :: RoutineName = 'WD_CalcOutput'
    real(ReKi)                                   :: correction(3)
-   real(ReKi)                                   :: r_tmp, C, S, R
-   real(ReKi)                                   :: dvdr       ! dv/dr
-   real(ReKi)                                   :: dvdtheta_r ! dv/dtheta * 1/r
-   character(256):: Filename
+   real(ReKi)                                   :: C, S, dvdr, dvdtheta_r, R, r_tmp
+   character(1024) :: Filename
    type(FVW_VTK_Misc)   :: mvtk
    real(ReKi), dimension(3) :: dx
    errStat = ErrID_None
@@ -1611,6 +1538,17 @@ subroutine WD_CalcOutput( t, u, p, x, xd, z, OtherState, y, m, errStat, errMsg )
       call NearWakeCorrection( u%Ct_azavg, u%Cq_azavg, u%Vx_rel_disk, p, m, y%Vx_wake(:,0), m%Vt_wake, u%D_rotor, errStat, errMsg )
          if (errStat > AbortErrLev)  return
       y%Vx_wake(:,1) = y%Vx_wake(:,0) 
+
+      ! States approx
+      ! NOTE: can't modify xd
+      !xd%psi_skew_filt     = u%psi_skew
+      !xd%chi_skew_filt     = u%chi_skew
+      !xd%Vx_wind_disk_filt(0) = u%Vx_wind_disk
+      !xd%D_rotor_filt  (0) = u%D_rotor
+      !xd%Ct_azavg_filt (:) = u%Ct_azavg(:)
+      ! Misc approx
+      m%Ct_avg    = get_Ctavg(p%r, u%Ct_azavg, u%D_rotor)
+      m%GammaCurl = u%D_Rotor/2. * u%Vx_wind_disk * m%Ct_avg * sin(u%chi_skew) * cos(u%chi_skew)
  
       
    else
@@ -1629,16 +1567,15 @@ subroutine WD_CalcOutput( t, u, p, x, xd, z, OtherState, y, m, errStat, errMsg )
    if (p%Mod_Wake == Mod_Wake_Polar) then
       ! Convert to Cartesian
       do i = 0, maxPln
-         call Axisymmetric2Cartesian(y%Vx_wake(:,i), y%Vr_wake(:,i), p%r, p%y, p%z, y%Vx_wake2(:,:,i), y%Vy_wake2(:,:,i), y%Vz_wake2(:,:,i))
+         call Axisymmetric2CartesianVel(y%Vx_wake(:,i), y%Vr_wake(:,i), p%r, p%y, p%z, y%Vx_wake2(:,:,i), y%Vy_wake2(:,:,i), y%Vz_wake2(:,:,i))
       enddo
-      ! WAT - Compute gradients dVx/dy and dVx/dz
-      if ( p%WkAdT ) then
-         do i = 0, min(n+1,p%NumPlanes-1)
-            call gradient_y(y%Vx_wake2(:,:,i), p%dr, m%dvx_dy(:,:,i))
-            call gradient_z(y%Vx_wake2(:,:,i), p%dr, m%dvx_dz(:,:,i))
+      if (p%OutAllPlanes) then 
+         do i = 0, maxPln
+            call Axisymmetric2Cartesian(m%vt_amb(:,i), p%r, p%y, p%z, m%vt_amb2(:,:,i))
+            call Axisymmetric2Cartesian(m%vt_shr(:,i), p%r, p%y, p%z, m%vt_shr2(:,:,i))
+            call Axisymmetric2Cartesian(m%vt_tot(:,i), p%r, p%y, p%z, m%vt_tot2(:,:,i))
          enddo
       endif
-
    else if (p%Mod_Wake == Mod_Wake_Cartesian .or. p%Mod_Wake == Mod_Wake_Curl) then
       do i = 0, maxPln
          y%Vx_wake2(:,:,i) = xd%Vx_wake2(:,:,i)
@@ -1646,13 +1583,13 @@ subroutine WD_CalcOutput( t, u, p, x, xd, z, OtherState, y, m, errStat, errMsg )
          y%Vz_wake2(:,:,i) = xd%Vz_wake2(:,:,i)
       enddo
    endif ! Curl or Polar
-  
+
    ! --- WAT - Compute k_mt and add turbulence
-   if ( p%WkAdT ) then
+   if ( p%WAT ) then
       R = u%D_Rotor /2
       do i = 1,maxPln  
          if ( EqualRealNos( xd%Vx_wind_disk_filt(i), 0.0_ReKi ) ) then
-            m%k_mt(:,:,i) = 0.0_ReKi
+            y%WAT_k_mt(:,:,i) = 0.0_ReKi
          else
             do iz = -p%NumRadii+1, p%NumRadii-1
                do iy = -p%NumRadii+1, p%NumRadii-1
@@ -1669,77 +1606,66 @@ subroutine WD_CalcOutput( t, u, p, x, xd, z, OtherState, y, m, errStat, errMsg )
                   endif
                   dvdr = m%dvx_dy(iy,iz,i) * C  + m%dvx_dz(iy,iz,i) * S
                   ! Calculate scaling factor k_mt for wake-added Turbulence
-                  m%k_mt(iy,iz,i) = p%k_m1_WkAdT *  abs(1 - ((xd%Vx_wind_disk_filt(i)+y%Vx_wake2(iy,iz,i))/xd%Vx_wind_disk_filt(i)) ) & 
-                                  + p%k_m2_WkAdT/xd%Vx_wind_disk_filt(i) * R * ( abs(dvdr) + abs(dvdtheta_r) )
-                  ! Add scaled turbulence
-                  y%Vx_wake2(iy,iz,i) = y%Vx_wake2(iy,iz,i) + m%k_mt(iy,iz,i) * xd%Vx_turb(iy,iz,i)
-                  y%Vy_wake2(iy,iz,i) = y%Vy_wake2(iy,iz,i) + m%k_mt(iy,iz,i) * xd%Vy_turb(iy,iz,i)
-                  y%Vz_wake2(iy,iz,i) = y%Vz_wake2(iy,iz,i) + m%k_mt(iy,iz,i) * xd%Vz_turb(iy,iz,i)
+                  y%WAT_k_mt(iy,iz,i) = p%WAT_k_Def *  abs(1 - ((xd%Vx_wind_disk_filt(i)+y%Vx_wake2(iy,iz,i))/xd%Vx_wind_disk_filt(i)) ) & 
+                                      + p%WAT_k_Grad/xd%Vx_wind_disk_filt(i) * R * ( abs(dvdr) + abs(dvdtheta_r) )
                end do ! iy
             end do ! iz
          endif
       end do ! i, plane
 
    end if
-
-
-
+   
    ! --- VTK outputs per plane
-   if (p%Mod_Wake == Mod_Wake_Cartesian .or. p%Mod_Wake == Mod_Wake_Curl) then
-      if (p%OutAllPlanes) then 
-          call vtk_misc_init(mvtk)
-          call set_vtk_binary_format(.false.,mvtk) ! TODO binary fails
+   if (p%OutAllPlanes) then 
+       call vtk_misc_init(mvtk)
+       call set_vtk_binary_format(.false., mvtk)
+       if ( OtherState%firstPass ) then
+          call MKDIR(p%OutFileVTKDir)
+       endif
+       do i = 0, min(n-1,p%NumPlanes-1), 1
+!             if (EqualRealNos(t,0.0_DbKi) ) then
+!                write(Filename,'(A,I4.4,A)') trim(p%OutFileVTKDir)//'/PlaneOutputsAtPlane_',i,'_Init.vtk'
+!             else
+!                write(Filename,'(A,I4.4,A,I9.9,A)') trim(p%OutFileVTKDir)//'PlaneOutputsAtPlane_',i,'_Time_',int(t*10),'.vtk'
+!             endif
+!             if ( vtk_new_ascii_file(trim(filename),'vel',mvtk) ) then
+!                dx(1) = 0.0
+!                dx(2) = p%dr
+!                dx(3) = p%dr
+!                call vtk_dataset_structured_points((/xd%p_plane(1,i),xd%p_plane(2,i)-dx*p%NumRadii, xd%p_plane(3,i)-dx*p%NumRadii /),dx,(/1,p%NumRadii*2-1,p%NumRadii*2-1/),mvtk)
+!                call vtk_point_data_init(mvtk)
+!                call vtk_point_data_scalar_2D(xd%Vx_wake2(:,:,i),'Vx',mvtk) 
+!                call vtk_point_data_scalar_2D(xd%Vy_wake2(:,:,i),'Vy',mvtk) 
+!                call vtk_point_data_scalar_2D(xd%Vz_wake2(:,:,i),'Vz',mvtk) 
+!                call vtk_close_file(mvtk)
+!             endif
 
-          if ( OtherState%firstPass ) then
-             call MKDIR('vtk_ff_planes')
+          ! --- Output Plane "per time"
+          write(Filename,'(A,I9.9,A,I4.4,A)') trim(p%OutFileVTKDir)// PathSep //trim(p%OutFileRoot)//'.WT'//trim(num2lstr(p%TurbNum))//'.PlaneAtTime_',int(t*100),'_Plane_',i,'.vtk'
+          if ( vtk_new_ascii_file(trim(filename),'vel',mvtk) ) then
+             dx(1) = 0.0
+             dx(2) = p%dr
+             dx(3) = p%dr
+             call vtk_dataset_structured_points((/xd%p_plane(1,i),-dx*p%NumRadii,-dx*p%NumRadii/),dx,(/1,p%NumRadii*2-1,p%NumRadii*2-1/),mvtk)
+             call vtk_point_data_init(mvtk)
+             call vtk_point_data_scalar_2D(xd%Vx_wake2(:,:,i),'Vx',mvtk) 
+             call vtk_point_data_scalar_2D(xd%Vy_wake2(:,:,i),'Vy',mvtk) 
+             call vtk_point_data_scalar_2D(xd%Vz_wake2(:,:,i),'Vz',mvtk) 
+             call vtk_point_data_scalar_2D(m%vt_amb2(:,:,i),'vt_amb2', mvtk) 
+             call vtk_point_data_scalar_2D(m%vt_shr2(:,:,i),'vt_shr2', mvtk) 
+             call vtk_point_data_scalar_2D(m%vt_tot2(:,:,i),'vt_tot2', mvtk) 
+
+             if (p%Mod_Wake == Mod_Wake_Cartesian .or. p%Mod_Wake == Mod_Wake_Curl) then
+                call vtk_point_data_scalar_2D(m%dvx_dy(:,:,i),'dvx_dy', mvtk) 
+                call vtk_point_data_scalar_2D(m%dvx_dz(:,:,i),'dvx_dz', mvtk) 
+             endif
+             if (p%WAT) then
+                call vtk_point_data_scalar_2D(y%WAT_k_mt(:,:,i),'k_mt', mvtk) 
+             endif             
+             call vtk_close_file(mvtk)
           endif
-      !if (mod(n,10)==0) then
-         do i = 0, min(n-1,p%NumPlanes-1), 1 ! TODO changed to n
-         
-!~             if (EqualRealNos(t,0.0_DbKi) ) then
-!~                write(Filename,'(A,I4.4,A)') 'vtk_ff_planes/PlaneOutputsAtPlane_',i,'_Init.vtk'
-!~             else
-!~                write(Filename,'(A,I4.4,A,I9.9,A)') 'vtk_ff_planes/PlaneOutputsAtPlane_',i,'_Time_',int(t*10),'.vtk'
-!~             endif
-!~             if ( vtk_new_ascii_file(trim(filename),'vel',mvtk) ) then
-!~                dx(1) = 0.0
-!~                dx(2) = p%dr
-!~                dx(3) = p%dr
-!~                call vtk_dataset_structured_points((/xd%p_plane(1,i),xd%p_plane(2,i)-dx*p%NumRadii, xd%p_plane(3,i)-dx*p%NumRadii /),dx,(/1,p%NumRadii*2-1,p%NumRadii*2-1/),mvtk)
-!~                call vtk_point_data_init(mvtk)
-!~                call vtk_point_data_scalar_2D(xd%Vx_wake2(:,:,i),'Vx',mvtk) 
-!~                call vtk_point_data_scalar_2D(xd%Vy_wake2(:,:,i),'Vy',mvtk) 
-!~                call vtk_point_data_scalar_2D(xd%Vz_wake2(:,:,i),'Vz',mvtk) 
-!~                call vtk_close_file(mvtk)
-!~             endif
-
-            ! --- Output Plane "per time"
-            ! TODO Turbine number
-            write(Filename,'(A,I9.9,A,I4.4,A)') 'vtk_ff_planes/'//trim(p%OutFileRoot)//'.WT'//trim(num2lstr(p%TurbNum))//'.PlaneOutputsAtTime_',int(t*100),'_Plane_',i,'.vtk'
-            if ( vtk_new_ascii_file(trim(filename),'vel',mvtk) ) then
-               dx(1) = 0.0
-               dx(2) = p%dr
-               dx(3) = p%dr
-               call vtk_dataset_structured_points((/xd%p_plane(1,i),-dx*p%NumRadii,-dx*p%NumRadii/),dx,(/1,p%NumRadii*2-1,p%NumRadii*2-1/),mvtk)
-               call vtk_point_data_init(mvtk)
-               call vtk_point_data_scalar_2D(xd%Vx_wake2(:,:,i),'Vx',mvtk) 
-               call vtk_point_data_scalar_2D(xd%Vy_wake2(:,:,i),'Vy',mvtk) 
-               call vtk_point_data_scalar_2D(xd%Vz_wake2(:,:,i),'Vz',mvtk) 
-               call vtk_point_data_scalar_2D(m%vt_amb2(:,:,i),'vt_amb2', mvtk) 
-               call vtk_point_data_scalar_2D(m%vt_shr2(:,:,i),'vt_shr2', mvtk) 
-               call vtk_point_data_scalar_2D(m%vt_tot2(:,:,i),'vt_tot2', mvtk) 
-               call vtk_point_data_scalar_2D(m%dvx_dy(:,:,i),'dvx_dy', mvtk) 
-               call vtk_point_data_scalar_2D(m%dvx_dz(:,:,i),'dvx_dz', mvtk) 
-               if (p%WkAdT) then
-                  call vtk_point_data_scalar_2D(m%k_mt(:,:,i),'k_mt', mvtk) 
-               endif
-               
-               call vtk_close_file(mvtk)
-            endif
-         enddo ! loop on planes
-      endif ! if time to ouput
-
-   endif
+       enddo ! loop on planes
+    endif
    
 end subroutine WD_CalcOutput
 
@@ -1829,7 +1755,7 @@ subroutine InitStatesWithInputs(numPlanes, numRadii, u, p, xd, m, errStat, errMs
    
    xd%Vx_rel_disk_filt     = u%Vx_rel_disk    
    
-      ! Initialze Ct_azavg_filt, Cq_azavg_filt, and Vx_wake; Vr_wake is already initialized to zero, so, we don't need to do that here.
+   ! Initialze Ct_azavg_filt, Cq_azavg_filt, and Vx_wake; Vr_wake is already initialized to zero, so, we don't need to do that here.
    xd%Ct_azavg_filt (:) = u%Ct_azavg(:)
    xd%Cq_azavg_filt (:) = u%Cq_azavg(:)
    
