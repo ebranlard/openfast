@@ -155,6 +155,17 @@ function(py_ad_regression TESTNAME LABEL)
   regression(${TEST_SCRIPT} ${AERODYN_EXECUTABLE} ${SOURCE_DIRECTORY} ${BUILD_DIRECTORY} ${TESTNAME} "${LABEL}")
 endfunction(py_ad_regression)
 
+
+# UnsteadyAero driver
+function(ua_regression TESTNAME LABEL)
+  set(TEST_SCRIPT "${CMAKE_CURRENT_LIST_DIR}/executeUnsteadyAeroRegressionCase.py")
+  set(AERODYN_EXECUTABLE "${CTEST_UADRIVER_EXECUTABLE}")
+  set(SOURCE_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/..")
+  set(BUILD_DIRECTORY "${CTEST_BINARY_DIR}/modules/unsteadyaero")
+  regression(${TEST_SCRIPT} ${AERODYN_EXECUTABLE} ${SOURCE_DIRECTORY} ${BUILD_DIRECTORY} ${TESTNAME} "${LABEL}")
+endfunction(ua_regression)
+
+
 # beamdyn
 function(bd_regression TESTNAME LABEL)
   set(TEST_SCRIPT "${CMAKE_CURRENT_LIST_DIR}/executeBeamdynRegressionCase.py")
@@ -173,14 +184,14 @@ function(hd_regression TESTNAME LABEL)
   regression(${TEST_SCRIPT} ${HYDRODYN_EXECUTABLE} ${SOURCE_DIRECTORY} ${BUILD_DIRECTORY} ${TESTNAME} "${LABEL}")
 endfunction(hd_regression)
 
-# hydrodyn-Py
-function(hd_py_regression TESTNAME LABEL)
+# py_hydrodyn
+function(py_hd_regression TESTNAME LABEL)
   set(TEST_SCRIPT "${CMAKE_CURRENT_LIST_DIR}/executeHydrodynPyRegressionCase.py")
   set(HYDRODYN_EXECUTABLE "${PYTHON_EXECUTABLE}")
   set(SOURCE_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/..")
   set(BUILD_DIRECTORY "${CTEST_BINARY_DIR}/modules/hydrodyn")
   regression(${TEST_SCRIPT} ${HYDRODYN_EXECUTABLE} ${SOURCE_DIRECTORY} ${BUILD_DIRECTORY} ${TESTNAME} "${LABEL}")
-endfunction(hd_py_regression)
+endfunction(py_hd_regression)
 
 # subdyn
 function(sd_regression TESTNAME LABEL)
@@ -200,14 +211,14 @@ function(ifw_regression TESTNAME LABEL)
   regression(${TEST_SCRIPT} ${INFLOWWIND_EXECUTABLE} ${SOURCE_DIRECTORY} ${BUILD_DIRECTORY} ${TESTNAME} "${LABEL}")
 endfunction(ifw_regression)
 
-# inflowwind-Py
-function(ifw_py_regression TESTNAME LABEL)
+# py_inflowwind
+function(py_ifw_regression TESTNAME LABEL)
   set(TEST_SCRIPT "${CMAKE_CURRENT_LIST_DIR}/executeInflowwindPyRegressionCase.py")
   set(INFLOWWIND_EXECUTABLE "${PYTHON_EXECUTABLE}")
   set(SOURCE_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/..")
   set(BUILD_DIRECTORY "${CTEST_BINARY_DIR}/modules/inflowwind")
   regression(${TEST_SCRIPT} ${INFLOWWIND_EXECUTABLE} ${SOURCE_DIRECTORY} ${BUILD_DIRECTORY} ${TESTNAME} "${LABEL}")
-endfunction(ifw_py_regression)
+endfunction(py_ifw_regression)
 
 # # Python-based OpenFAST Library tests
 # function(py_openfast_library_regression TESTNAME LABEL)
@@ -308,6 +319,9 @@ ad_regression("ad_BAR_SineMotion_UA4_DBEMT3" "aerodyn;bem")
 ad_regression("ad_BAR_RNAMotion"            "aerodyn;bem")
 py_ad_regression("py_ad_5MW_OC4Semi_WSt_WavesWN"     "aerodyn;bem;python")
 
+# UnsteadyAero
+ua_regression("ua_redfreq"                  "unsteadyaero")
+
 # BeamDyn regression tests
 bd_regression("bd_5MW_dynamic"              "beamdyn;dynamic")
 bd_regression("bd_5MW_dynamic_gravity_Az00" "beamdyn;dynamic")
@@ -326,8 +340,8 @@ hd_regression("hd_5MW_OC4Semi_WSt_WavesWN"                  "hydrodyn;offshore")
 hd_regression("hd_5MW_TLP_DLL_WTurb_WavesIrr_WavesMulti"    "hydrodyn;offshore")
 hd_regression("hd_TaperCylinderPitchMoment"                 "hydrodyn;offshore")
 
-# HydroDyn-Py regression tests
-hd_py_regression("hd_py_5MW_OC4Semi_WSt_WavesWN"            "hydrodyn;offshore;python")
+# Py-HydroDyn regression tests
+py_hd_regression("py_hd_5MW_OC4Semi_WSt_WavesWN"            "hydrodyn;offshore;python")
 
 # SubDyn regression tests
 sd_regression("SD_Cable_5Joints"                              "subdyn;offshore")
@@ -344,4 +358,6 @@ sd_regression("SD_AnsysComp3_PinBeamCable"                    "subdyn;offshore")
 
 # InflowWind regression tests
 ifw_regression("ifw_turbsimff"                                "inflowwind")
-ifw_py_regression("ifw_py_turbsimff"                          "inflowwind;python")
+
+# Py-InflowWind regression tests
+py_ifw_regression("py_ifw_turbsimff"                          "inflowwind;python")
