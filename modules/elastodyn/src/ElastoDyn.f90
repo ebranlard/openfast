@@ -10039,26 +10039,31 @@ END IF
          KTSSGrav(I,I) = KTSSGrav(I,I) + ElmntStff*p%TwrSSSF(I,J,1)**2
       ENDDO  
    ENDDO
-   WRITE (UNSU,'(A)'     )'Tower generalized frequencies (no top mass and stiffnening):'
-   WRITE (UNSU,'(4ES14.6)') p%FreqTFA(1,1), p%FreqTFA(2,1), p%FreqTSS(1,1), p%FreqTSS(2,1) 
-   WRITE (UNSU,'(A)'     )'Tower generalized frequencies (with top mass and stiffnening):'
-   WRITE (UNSU,'(4ES14.6)') p%FreqTFA(1,2), p%FreqTFA(2,2), p%FreqTSS(1,2), p%FreqTSS(2,2) 
-   WRITE (UNSU,'(A)'     ) 'Tower generalized mass matrix (without top mass):'
-   WRITE (UNSU,'(4ES14.6)') MTFA(1,1), MTFA(1,2), 0.         , 0.
-   WRITE (UNSU,'(4ES14.6)') MTFA(2,1), MTFA(2,2), 0.         , 0.
-   WRITE (UNSU,'(4ES14.6)') 0.       , 0.       , MTSS(1,1), MTSS(1,2)
-   WRITE (UNSU,'(4ES14.6)') 0.       , 0.       , MTSS(2,1), MTSS(2,2)
-   WRITE (UNSU,'(A)'     ) 'Tower generalized stiffness matrix (without stiffening):'
-   WRITE (UNSU,'(4ES14.6)') p%KTFA(1,1), p%KTFA(1,2), 0.          , 0.
-   WRITE (UNSU,'(4ES14.6)') p%KTFA(2,1), p%KTFA(2,2), 0.          , 0.
-   WRITE (UNSU,'(4ES14.6)') 0.          , 0.          , p%KTSS(1,1), p%KTSS(1,2)
-   WRITE (UNSU,'(4ES14.6)') 0.          , 0.          , p%KTSS(2,1), p%KTSS(2,2)
-   WRITE (UNSU,'(A)'     ) 'Tower generalized stiffness matrix (with stiffening):'
-   WRITE (UNSU,'(4ES14.6)') p%KTFA(1,1)+KTFAGrav(1,1), p%KTFA(1,2)              , 0.           , 0.
-   WRITE (UNSU,'(4ES14.6)') p%KTFA(2,1)              , p%KTFA(2,2)+KTFAGrav(2,2), 0.          , 0.
-   WRITE (UNSU,'(4ES14.6)') 0.                        , 0.                        , p%KTSS(1,1)+KTSSGrav(1,1), p%KTSS(1,2)
-   WRITE (UNSU,'(4ES14.6)') 0.                        , 0.                        , p%KTSS(2,1), p%KTSS(2,2)+KTSSGrav(2,2)
-   WRITE (UnSu,'(A)'     ) 'Tower generalized damping matrix:'
+   WRITE (UnSu,'(A)'     )'Tower generalized frequencies (no top mass and stiffnening):'
+   WRITE (UnSu,'(4ES14.6)') p%FreqTFA(1,1), p%FreqTFA(2,1), p%FreqTSS(1,1), p%FreqTSS(2,1) 
+   WRITE (UnSu,'(A)'     )'Tower generalized frequencies (with top mass and stiffnening):'
+   WRITE (UnSu,'(4ES14.6)') p%FreqTFA(1,2), p%FreqTFA(2,2), p%FreqTSS(1,2), p%FreqTSS(2,2) 
+   WRITE (UnSu,'(A)'     ) 'Tower generalized mass matrix (without top mass):'
+   WRITE (UnSu,'(4ES14.6)') MTFA(1 , 1)-p%TwrTpMass , MTFA(1 , 2)             , 0.     , 0.
+   WRITE (UnSu,'(4ES14.6)') MTFA(2 , 1)             , MTFA(2 , 2)-p%TwrTpMass , 0.     , 0.
+   WRITE (UnSu,'(4ES14.6)') 0.     , 0.             , MTSS(1 , 1)-p%TwrTpMass , MTSS(1 , 2)
+   WRITE (UnSu,'(4ES14.6)') 0.     , 0.             , MTSS(2 , 1)             , MTSS(2 , 2)-p%TwrTpMass
+   WRITE (UnSu,'(A)'     ) 'Tower generalized mass matrix (with top mass) (MTFA, MTSS):'
+   WRITE (UnSu,'(4ES14.6)') MTFA(1,1), MTFA(1,2), 0.         , 0.
+   WRITE (UnSu,'(4ES14.6)') MTFA(2,1), MTFA(2,2), 0.         , 0.
+   WRITE (UnSu,'(4ES14.6)') 0.       , 0.       , MTSS(1,1), MTSS(1,2)
+   WRITE (UnSu,'(4ES14.6)') 0.       , 0.       , MTSS(2,1), MTSS(2,2)
+   WRITE (UnSu,'(A)'     ) 'Tower generalized stiffness matrix (without stiffening) (KTFA, KTSS):'
+   WRITE (UnSu,'(4ES14.6)') p%KTFA(1,1), p%KTFA(1,2), 0.          , 0.
+   WRITE (UnSu,'(4ES14.6)') p%KTFA(2,1), p%KTFA(2,2), 0.          , 0.
+   WRITE (UnSu,'(4ES14.6)') 0.          , 0.          , p%KTSS(1,1), p%KTSS(1,2)
+   WRITE (UnSu,'(4ES14.6)') 0.          , 0.          , p%KTSS(2,1), p%KTSS(2,2)
+   WRITE (UnSu,'(A)'     ) 'Tower generalized stiffness matrix (with stiffening):'
+   WRITE (UnSu,'(4ES14.6)') p%KTFA(1,1)+KTFAGrav(1,1), p%KTFA(1,2)              , 0.           , 0.
+   WRITE (UnSu,'(4ES14.6)') p%KTFA(2,1)              , p%KTFA(2,2)+KTFAGrav(2,2), 0.          , 0.
+   WRITE (UnSu,'(4ES14.6)') 0.                        , 0.                        , p%KTSS(1,1)+KTSSGrav(1,1), p%KTSS(1,2)
+   WRITE (UnSu,'(4ES14.6)') 0.                        , 0.                        , p%KTSS(2,1), p%KTSS(2,2)+KTSSGrav(2,2)
+   WRITE (UnSu,'(A)'     ) 'Tower generalized damping matrix (CTFA, CTSS):'
    WRITE (UnSu,'(4ES14.6)') p%CTFA(1,1), p%CTFA(1,2), 0.          , 0.
    WRITE (UnSu,'(4ES14.6)') p%CTFA(2,1), p%CTFA(2,2), 0.          , 0.
    WRITE (UnSu,'(4ES14.6)') 0.          , 0.          , p%CTSS(1,1), p%CTSS(1,2)
