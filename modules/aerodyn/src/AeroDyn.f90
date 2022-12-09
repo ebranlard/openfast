@@ -337,6 +337,7 @@ subroutine AD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
    p%SkewMod = InputFileData%SkewMod
    do iR = 1, nRotors
       p%rotors(iR)%AeroProjMod = InitInp%rotors(iR)%AeroProjMod
+      print*,'>>> AeroDyn projmod',p%rotors(iR)%AeroProjMod
       call SetParameters( InitInp, InputFileData, InputFileData%rotors(iR), p%rotors(iR), p, ErrStat2, ErrMsg2 )
       if (Failed()) return;
    enddo
@@ -550,6 +551,9 @@ subroutine AD_ReInit(p, x, xd, z, OtherState, m, Interval, ErrStat, ErrMsg )
                call SetErrStat(ErrStat2,ErrMsg2,ErrStat,ErrMsg,RoutineName)
          end if
       enddo
+   else
+      ErrStat = ErrID_Fatal
+      ErrMsg = 'AD_ReInit: Cannot reinitialize AeroDyn with OLAF'
    end if
 
       
