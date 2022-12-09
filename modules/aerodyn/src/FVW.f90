@@ -26,6 +26,7 @@ module FVW
 
    public   :: FVW_Init             ! Initialization routine
    public   :: FVW_End
+   public   :: FVW_ReInit  !< THIS IS BETA
 
    public   :: FVW_CalcOutput
    public   :: FVW_UpdateStates
@@ -162,6 +163,101 @@ CONTAINS
 
 end subroutine FVW_Init
 
+!----------------------------------------------------------------------------------------------------------------------------------
+!> This routine is called when restarting a combined case 
+subroutine FVW_ReInit( p, x, xd, z, OtherState,  m, ErrStat, ErrMsg )
+   use OMP_LIB ! wrap with #ifdef _OPENMP if this causes an issue
+   type(FVW_ParameterType),         intent(inout)  :: p              !< Parameters
+   type(FVW_ContinuousStateType),   intent(inout)  :: x              !< Initial continuous states
+   type(FVW_DiscreteStateType),     intent(inout)  :: xd             !< Initial discrete states
+   type(FVW_ConstraintStateType),   intent(inout)  :: z              !< Initial guess of the constraint states
+   type(FVW_OtherStateType),        intent(inout)  :: OtherState     !< Initial other states
+   type(FVW_MiscVarType),           intent(inout)  :: m              !< Initial misc/optimization variables
+   integer(IntKi),                  intent(  out)  :: ErrStat        !< Error status of the operation
+   character(*),                    intent(  out)  :: ErrMsg         !< Error message if ErrStat /= ErrID_None
+   ! Local variables
+   integer(IntKi)          :: ErrStat2       ! temporary error status of the operation
+   character(ErrMsgLen)    :: ErrMsg2        ! temporary error message
+   integer(IntKi)          :: UnEcho         ! Unit number for the echo file
+   character(*), parameter :: RoutineName = 'FVW_Init'
+   type(FVW_InputFile)     :: InputFileData                                            !< Data stored in the module's input file
+   character(len=1054) :: DirName
+   integer :: iW, iGrid
+
+   ! Initialize variables for this routine
+   ErrStat = ErrID_None
+   ErrMsg  = ""
+   UnEcho  = -1
+
+   ! --- Set Parameters from inputs
+   call FVW_SetRootName(p%RootName, p) ! In case the caller updated p%RootName
+
+   ! --- Initialize Misc Vars (may depend on input file)
+   m%FirstCall = .True.
+   m%nNW       = p%iNWStart-1  ! Number of active nearwake panels
+   m%nFW       = 0             ! Number of active farwake  panels
+   m%iStep     = 0             ! Current step number
+   m%VTKstep   = -1            ! Counter of VTK outputs
+   m%VTKlastTime = -HUGE(1.0_DbKi)
+   m%OldWakeTime = -HUGE(1.0_DbKi)
+   do iW = 1,p%nWings
+      m%W(iW)%iTip=-1 ! Imort init
+      m%W(iW)%iRoot=-1 ! Imort init
+      m%W(iW)%Vwnd_CP(:,:)   = 0
+      m%W(iW)%Vwnd_NW(:,:,:) = 0
+      m%W(iW)%Vwnd_FW(:,:,:) = 0
+   enddo
+   ! Grid outputs
+   do iGrid=1,p%nGridOut
+      m%GridOutputs(iGrid)%tLastOutput = -HUGE(1.0_DbKi)
+   enddo
+   m%r_wind = 0.0_ReKi     ! set to zero so InflowWind can shortcut calculations
+
+   ! Move the InitInp%WingsMesh to u
+   ! >>>>
+   !CALL MOVE_ALLOC( InitInp%WingsMesh, u%WingsMesh )     ! Move from InitInp to u
+   ! This mesh is passed in as a cousin of the BladeMotion mesh.
+   ! >>>
+   !CALL Wings_Panelling_Init(u%WingsMesh, p, ErrStat2, ErrMsg2); if(Failed()) return
+
+   ! ---  Initialize Misc Vars (after input file params)
+   m%Sgmt%nAct        = -1  ! Active segments
+   m%Sgmt%nActP       = -1
+   m%Part%nAct        = -1  ! Active particles
+
+   ! --- Initialize States Vars
+   do iW=1,p%nWings
+      x%W(iW)%r_NW     = 0.0_ReKi
+      x%W(iW)%r_FW     = 0.0_ReKi
+      x%W(iW)%Gamma_NW = 0.0_ReKi ! First call of calcoutput, states might not be set 
+      x%W(iW)%Gamma_FW = 0.0_ReKi ! NOTE, these values might be mapped from z%W(iW)%Gamma_LL at init
+      x%W(iW)%Eps_NW   = 0.001_ReKi 
+      x%W(iW)%Eps_FW   = 0.001_ReKi 
+   enddo
+
+   ! Panelling wings based on initial input mesh provided
+   ! >>> TODO Might be needed for reinit
+   !CALL Wings_Panelling     (u%WingsMesh, p, m, ErrStat2, ErrMsg2); if(Failed()) return
+   !call Map_LL_NW(p, m, z, x, 1.0_ReKi, ErrStat2, ErrMsg2); if(Failed()) return
+   !call Map_NW_FW(p, m, z, x, ErrStat2, ErrMsg2); if(Failed()) return
+
+   ! Returned guessed locations where wind will be required
+   !CALL SetRequestedWindPoints(m%r_wind, x, p, m )
+
+   ! --- UA 
+   call FVW_UA_ReInit(p, x, xd, OtherState, m, ErrStat2, ErrMsg2); if (Failed()) return
+
+   ! Framework types unused
+   OtherState%Dummy = 0
+   xd%Dummy         = 0
+contains
+   logical function Failed()
+        call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, 'FVW_ReInit') 
+        Failed =  ErrStat >= AbortErrLev
+   end function Failed
+end subroutine FVW_ReInit
+
+
 ! ==============================================================================
 subroutine FVW_InitMiscVars( p, m, ErrStat, ErrMsg )
    type(FVW_ParameterType),         intent(in   )  :: p              !< Parameters
@@ -182,7 +278,7 @@ subroutine FVW_InitMiscVars( p, m, ErrStat, ErrMsg )
    m%nNW       = p%iNWStart-1  ! Number of active nearwake panels
    m%nFW       = 0             ! Number of active farwake  panels
    m%iStep     = 0             ! Current step number
-   m%VTKStep   = -1            ! Counter of VTK outputs
+   m%VTKstep   = -1            ! Counter of VTK outputs
    m%VTKlastTime = -HUGE(1.0_DbKi)
    m%OldWakeTime = -HUGE(1.0_DbKi)
 
@@ -329,12 +425,22 @@ subroutine FVW_Init_U_Y( p, u, y, m, ErrStat, ErrMsg )
    enddo
    ! Rotors, contain hub info
    allocate(u%rotors(p%nRotors))
-
-
 end subroutine FVW_Init_U_Y
 ! ==============================================================================
 !> Setting parameters *and misc* from module inputs
-SUBROUTINE FVW_SetParametersFromInputs( InitInp, p, ErrStat, ErrMsg )
+subroutine FVW_SetRootName(RootName, p)
+   character(*)           , intent(in   ) :: RootName !< Input data for initialization routine  (inout so we can use MOVE_ALLOC)
+   type(FVW_ParameterType), intent(inout) :: p        !< Parameters
+   ! Local variables
+   character(1024)         :: rootDir, baseName  ! Simulation root dir and basename
+   p%RootName     = RootName        ! Rootname for outputs
+   call GetPath( p%RootName, rootDir, baseName ) 
+   p%VTK_OutFileRoot = trim(rootDir) // 'vtk_fvw'  ! Directory for VTK outputs
+   p%VTK_OutFileBase = trim(rootDir) // 'vtk_fvw' // PathSep // trim(baseName) ! Basename for VTK files
+end subroutine FVW_SetRootName
+! ==============================================================================
+!> Setting parameters *and misc* from module inputs
+subroutine FVW_SetParametersFromInputs( InitInp, p, ErrStat, ErrMsg )
    type(FVW_InitInputType),    intent(inout)  :: InitInp       !< Input data for initialization routine  (inout so we can use MOVE_ALLOC)
    type(FVW_ParameterType),    intent(inout) :: p             !< Parameters
    integer(IntKi),             intent(  out) :: ErrStat       !< Error status of the operation
@@ -352,10 +458,8 @@ SUBROUTINE FVW_SetParametersFromInputs( InitInp, p, ErrStat, ErrMsg )
    p%nWings       = size(InitInp%WingsMesh)
    p%DTaero       = InitInp%DTaero          ! AeroDyn Time step
    p%KinVisc      = InitInp%KinVisc         ! Kinematic air viscosity
-   p%RootName     = InitInp%RootName        ! Rootname for outputs
-   call GetPath( p%RootName, rootDir, baseName ) 
-   p%VTK_OutFileRoot = trim(rootDir) // 'vtk_fvw'  ! Directory for VTK outputs
-   p%VTK_OutFileBase = trim(rootDir) // 'vtk_fvw' // PathSep // trim(baseName) ! Basename for VTK files
+   call FVW_SetRootName(InitInp%RootName, p)
+
    ! Set indexing to AFI tables -- this is set from the AD15 calling code.
 
    ! Set the Chord values
@@ -455,8 +559,35 @@ SUBROUTINE FVW_SetParametersFromInputFile( InputFileData, p, ErrStat, ErrMsg )
 end subroutine FVW_SetParametersFromInputFile
 !----------------------------------------------------------------------------------------------------------------------------------
 !> This routine is called at the end of the simulation.
+subroutine FVW_FinalWrite(u, p, x, z, m, ErrStat, ErrMsg)
+   type(FVW_InputType),             intent(in   )  :: u           !< System inputs
+   type(FVW_ParameterType),         intent(in   )  :: p           !< Parameters
+   type(FVW_ContinuousStateType),   intent(in   )  :: x           !< Continuous states
+   type(FVW_ConstraintStateType),   intent(in   )  :: z           !< Constraint states
+   type(FVW_MiscVarType),           intent(inout)  :: m           !< Misc/optimization variables
+   integer(IntKi),                  intent(  out)  :: ErrStat     !< Error status of the operation
+   character(*),                    intent(  out)  :: ErrMsg      !< Error message if ErrStat /= ErrID_None
+   real(DbKi) :: t
+   integer, parameter :: FINAL_STEP = 999999999
+   ErrStat = ErrID_None
+   ErrMsg  = ""
+   ! Place any last minute operations or calculations here:
+   if (p%WrVTK>0 .and. m%VTKstep<FINAL_STEP) then
+      print*,'>>> FINAL WRITE'
+      t=-1.0_ReKi
+      if (p%WrVTK==1) then
+         if (m%VTKstep<m%iStep+1) then
+            call WriteVTKOutputs(t, .true., m%iStep+1, u, p, x, z, m, ErrStat, ErrMsg)
+         endif
+      elseif (p%WrVTK==2) then
+         call WriteVTKOutputs(t, .true., FINAL_STEP, u, p, x, z, m, ErrStat, ErrMsg)
+      endif
+      m%VTKstep = FINAL_STEP ! We make sure we don't write again
+   endif
+end subroutine FVW_FinalWrite
+!----------------------------------------------------------------------------------------------------------------------------------
+!> This routine is called at the end of the simulation. NOTE: we don't store errstat
 subroutine FVW_End( u, p, x, xd, z, OtherState, y, m, ErrStat, ErrMsg )
-
    type(FVW_InputType),allocatable, intent(inout)  :: u(:)        !< System inputs
    type(FVW_ParameterType),         intent(inout)  :: p           !< Parameters
    type(FVW_ContinuousStateType),   intent(inout)  :: x           !< Continuous states
@@ -467,22 +598,11 @@ subroutine FVW_End( u, p, x, xd, z, OtherState, y, m, ErrStat, ErrMsg )
    type(FVW_MiscVarType),           intent(inout)  :: m           !< Misc/optimization variables
    integer(IntKi),                  intent(  out)  :: ErrStat     !< Error status of the operation
    character(*),                    intent(  out)  :: ErrMsg      !< Error message if ErrStat /= ErrID_None
-
-   integer(IntKi) :: i
-   real(DbKi) :: t
-
-   ! Initialize ErrStat
+   integer :: i
    ErrStat = ErrID_None
    ErrMsg  = ""
-   ! Place any last minute operations or calculations here:
-   if (p%WrVTK==2) then
-      call WrScr('Outputs of VTK before FVW_END')
-      t=-1.0_ReKi
-      m%VTKStep=999999999 ! not pretty, but we know we have twidth=9
-      call WriteVTKOutputs(t, .true., u(1), p, x, z, m, ErrStat, ErrMsg)
-   endif
-
-   ! Close files here:
+   ! Final trigger
+   call FVW_FinalWrite(u(1), p, x, z, m, ErrStat, ErrMsg)
    
    ! Destroy the input data:
    if (allocated(u)) then
@@ -1393,6 +1513,7 @@ subroutine FVW_CalcOutput(t, u, p, x, xd, z, OtherState, y, m, ErrStat, ErrMsg)
    integer(IntKi),                  intent(  out)  :: ErrStat     !< Error status of the operation
    character(*),                    intent(  out)  :: ErrMsg      !< Error message if ErrStat /= ErrID_None
    ! Local variables
+   integer(IntKi)                :: nP
    integer(IntKi)                :: ErrStat2
    character(ErrMsgLen)          :: ErrMsg2
    character(*), parameter       :: RoutineName = 'FVW_CalcOutput'
@@ -1414,22 +1535,29 @@ subroutine FVW_CalcOutput(t, u, p, x, xd, z, OtherState, y, m, ErrStat, ErrMsg)
 
    ! Write some info to screen when major milestone achieved
    if (m%iStep == p%nNWFree .and. p%nNWFree<p%nNWMax) then
-      call WrScr(NewLine//'[INFO] OLAF free near wake is at full extent at time: '//trim(num2lstr(t)))
+      nP = CountCPs(p, p%nNWFree, 0)
+      call WrScr(NewLine//'[INFO] OLAF free near wake is at full extent - '//trim(num2lstr(t))//'s, '//trim(num2lstr(nP))//' points.')
    endif
    if (m%iStep == p%nNWMax) then
-      call WrScr(NewLine//'[INFO] OLAF near wake is at full extent at time: '//trim(num2lstr(t)))
+      nP = CountCPs(p, p%nNWMax, 0)
+      if (p%nFWMax==0) then
+         call WrScr(NewLine//'[INFO] OLAF wake is at full extent - '//trim(num2lstr(t))//'s, '//trim(num2lstr(nP))//' points.')
+      else
+         call WrScr(NewLine//'[INFO] OLAF near wake is at full extent - '//trim(num2lstr(t))//'s, '//trim(num2lstr(nP))//' points.')
+      endif
    endif
    if (p%nFWMax>0 .and. m%iStep== p%nNWMax+p%nFWMax) then
-      call WrScr(NewLine//'[INFO] OLAF far wake is at full extent at time: '//trim(num2lstr(t)))
+      nP = CountCPs(p, p%nNWMax, p%nFWMax)
+      call WrScr(NewLine//'[INFO] OLAF wake is at full extent - '//trim(num2lstr(t))//'s, '//trim(num2lstr(nP))//' points.')
    endif
    
    ! Export to VTK
-   if (m%VTKStep==-1) then 
-      m%VTKStep = 0 ! Has never been called, special handling for init
+   if (m%VTKstep==-1) then 
+       ! Has never been called, special handling for init
+      call WriteVTKOutputs(t, .False., 0        , u, p, x, z, m, ErrStat2, ErrMsg2)
    else
-      m%VTKStep = m%iStep+1 ! We use glue code step number for outputs
+      call WriteVTKOutputs(t, .False., m%iStep+1, u, p, x, z, m, ErrStat2, ErrMsg2)
    endif
-   call WriteVTKOutputs(t, .False., u, p, x, z, m, ErrStat2, ErrMsg2)
    call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
 
    if (OLAF_PROFILING) call toc()
@@ -1439,9 +1567,10 @@ end subroutine FVW_CalcOutput
 
 !------------------------------------------------------------------------------------------------
 !> Write to  vtk_fvw folder at fps requested
-subroutine WriteVTKOutputs(t, force, u, p, x, z, m, ErrStat, ErrMsg)
+subroutine WriteVTKOutputs(t, force, VTKstep, u, p, x, z, m, ErrStat, ErrMsg)
    real(DbKi),                      intent(in   )  :: t       !< Current simulation time in seconds
    logical,                         intent(in   )  :: force   !< force the writing
+   integer,                         intent(in   )  :: VTKstep !< step index used to write the filenames
    type(FVW_InputType),             intent(in   )  :: u       !< Inputs at Time t
    type(FVW_ParameterType),         intent(in   )  :: p       !< Parameters
    type(FVW_ContinuousStateType),   intent(in   )  :: x       !< Continuous states at t
@@ -1480,13 +1609,14 @@ subroutine WriteVTKOutputs(t, force, u, p, x, z, m, ErrStat, ErrMsg)
                call SetErrStat(ErrID_Warn, ErrMsg2, ErrStat, ErrMsg, RoutineName)
             endif
             ! We ouput in first rotor frame
-            call WrVTK_FVW(p, x, z, m, trim(p%VTK_OutFileBase)//'FVW_Hub', m%VTKStep, 9, bladeFrame=.TRUE.,  &
+            call WrVTK_FVW(p, x, z, m, trim(p%VTK_OutFileBase)//'FVW_Hub', VTKstep, 9, bladeFrame=.TRUE.,  &
                      HubOrientation=real(u%rotors(1)%HubOrientation,ReKi),HubPosition=real(u%rotors(1)%HubPosition,ReKi))
          endif
          if ((p%VTKCoord==1).or.(p%VTKCoord==3)) then
             ! Global coordinate system, ALL VTK will be exported in global
-            call WrVTK_FVW(p, x, z, m, trim(p%VTK_OutFileBase)//'FVW_Glb', m%VTKStep, 9, bladeFrame=.FALSE.)
+            call WrVTK_FVW(p, x, z, m, trim(p%VTK_OutFileBase)//'FVW_Glb', VTKstep, 9, bladeFrame=.FALSE.)
          endif
+         m%VTKstep=VTKstep ! We save the step at which writing occured
       endif
    endif
    ! --- Write VTK grids
@@ -1505,7 +1635,8 @@ subroutine WriteVTKOutputs(t, force, u, p, x, z, m, ErrStat, ErrMsg)
             call InducedVelocitiesAll_OnGrid(m%GridOutputs(iGrid), p, x, m, ErrStat2, ErrMsg2);
             call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
             m%GridOutputs(iGrid)%tLastOutput = t
-            call WrVTK_FVW_Grid(p, m, iGrid, trim(p%VTK_OutFileBase)//'FVW_Grid', m%VTKStep, 9)
+            call WrVTK_FVW_Grid(p, m, iGrid, trim(p%VTK_OutFileBase)//'FVW_Grid', VTKstep, 9)
+            m%VTKstep=VTKstep ! We save the step at which writing occured
          endif
       enddo
    endif
@@ -1586,6 +1717,30 @@ contains
       Failed =  ErrStat >= AbortErrLev
    end function Failed
 end subroutine  UA_Init_Wrapper
+
+subroutine FVW_UA_ReInit(p, x, xd, OtherState, m, ErrStat, ErrMsg)
+   use UnsteadyAero, only: UA_ReInit
+   type(FVW_ParameterType),         intent(inout)  :: p           !< Parameters
+   type(FVW_ContinuousStateType),   intent(inout)  :: x           !< Initial continuous states
+   type(FVW_DiscreteStateType),     intent(inout)  :: xd          !< Initial discrete states
+   type(FVW_OtherStateType),        intent(inout)  :: OtherState  !< Initial other states
+   type(FVW_MiscVarType),           intent(inout)  :: m           !< Initial misc/optimization variables
+   integer(IntKi),                  intent(  out)  :: ErrStat     !< Error status of the operation
+   character(*),                    intent(  out)  :: ErrMsg      !< Error message if ErrStat /= ErrID_None
+   integer                :: iW
+   integer(intKi)         :: ErrStat2
+   character(ErrMsgLen)   :: ErrMsg2
+   ErrStat = ErrID_None
+   ErrMsg  = ""
+   if ( m%UA_Flag ) then
+      do iW=1,p%nWings
+         call UA_ReInit( m%W(iW)%p_UA, x%UA(iW), xd%UA(iW), OtherState%UA(iW), m%W(iW)%m_UA, ErrStat2, ErrMsg2)
+         call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, 'FVW_UA_ReInit')
+      enddo
+   endif
+end subroutine FVW_UA_ReInit
+
+
 
 !------------------------------------------------------------------------------------------------
 !> Compute necessary inputs for UA at a given time step, stored in m%u_UA
