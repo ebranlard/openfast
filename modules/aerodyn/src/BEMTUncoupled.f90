@@ -571,29 +571,7 @@ subroutine inductionFactors0(B, r, chord, phi, cn, ct, Vx, Vy, F, wakerotation, 
    if (wakerotation) then 
       VxCorrected = Vx
       call getTangentialInduction(a, cphi, sphi, Vx, F, 1.0_R8Ki, sigma_p, ct, VxCorrected, 0.0_R8Ki, 1.0_R8Ki, .False., ap, kp)
-   
-!          ! compute tangential induction factor
-!       if ( EqualRealNos(cphi,0.0_ReKi) ) then
-!          
-!          ap = -1.0_ReKi
-!          kp =  sign(InductionLimit, ct*sphi)*sign(1.0_ReKi,Vx)
-!          
-!       else
-!          
-!          kp = sigma_p*ct/4.0_ReKi/F/sphi/cphi
-!          if (Vx < 0.0_ReKi) then 
-!             kp = -kp
-!          end if
-!          
-!       
-!          if ( EqualRealNos(kp,1.0_ReKi) ) then
-!             ap = sign(InductionLimit, 1.0_ReKi-kp)
-!          else
-!             ap = kp/(1.0_ReKi-kp)
-!          end if
-! 
-!       endif
-!             
+     
    else 
       
       ! we're not computing tangential induction:       
@@ -1016,6 +994,41 @@ subroutine limitInductionFactors(a,ap)
    
 end subroutine limitInductionFactors
 !-----------------------------------------------------------------------------------------
+!> This function returns a smoothstep function
+!>    See: https://en.wikipedia.org/wiki/Smoothstep
+real(reKi) function smoothStep( xIN, x1, f1, x2, f2 ) result(f)
+! SMOOTHSTEP  Blending function.
+!
+!  f = SMOOTHSTEP( x, order, x1, f1, x2, f2 )
+!   x: input vector
+!   x1: "left edge" x value of the smoothstep
+!   f1: "left edge" functional value of the smoothstep
+!   x2: "right edge" x value of the smoothstep
+!   f2: "right edge" functional value of the smoothstep
+!
+!  https://en.wikipedia.org/wiki/Smoothstep
+
+   implicit none
+   
+   real(ReKi), intent(in) :: xIN
+   real(ReKi), intent(in) :: x1
+   real(ReKi), intent(in) :: f1
+   real(ReKi), intent(in) :: x2
+   real(ReKi), intent(in) :: f2
+   real(ReKi) :: x
+
+   x = (xIN-x1)/(x2-x1)
+   x = min( max( x, 0.0_ReKi ), 1.0_ReKi )
+
+   ! 3rd order
+   !  f' = 0 at x=0 and x=1
+   f = -2.0_ReKi*x**3 + 3.0_ReKi*x**2
+
+   ! Scale f from [0,1] to [f1,f2]
+   f = (f2-f1)*f+f1
+   
+end function smoothStep
+
 subroutine sortRoots(a)
 ! Sort the roots
     complex(R8Ki), intent(inout) :: a(4)
