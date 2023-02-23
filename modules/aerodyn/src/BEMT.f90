@@ -1549,7 +1549,35 @@ subroutine ApplySkewedWakeCorrection_AllNodes(p, u, m, axInduction, chi)
    end if
 
 end subroutine ApplySkewedWakeCorrection_AllNodes
+!----------------------------------------------------------------------------------------------------------------------------------
+function CalculateChiAngle(p, u, m, x, OtherState, UseV0) result(chi)
+   type(BEMT_InputType),           intent(in   )  :: u           ! Inputs at Time t
+   type(BEMT_ParameterType),       intent(in   )  :: p           ! Parameters
+   type(BEMT_MiscVarType),         intent(in   )  :: m           ! Misc/optimization variables
+   type(BEMT_ContinuousStateType), intent(in   )  :: x           ! continuous states (for filter on V_w)
+   type(BEMT_OtherStateType),      intent(in   )  :: OtherState  ! Other states at t
+   logical,                        intent(in   )  :: UseV0       ! Whether to initialize with V0 or try to use a state
+   
+   real(ReKi)                                     :: v_w(3)      ! wake velocity
+   real(ReKi)                                     :: denom       ! denominator
+   real(ReKi)                                     :: chi         ! skew angle
 
+   if (UseV0) then
+      v_w = u%V0
+   elseif (.not. OtherState%nodesInitialized) then
+      v_w = m%u_SkewWake(1)%v_qsw
+   else
+      v_w = x%v_w
+   end if
+   
+   denom= TwoNorm(v_w)
+   if (EqualRealNos(denom, 0.0_ReKi)) then
+      chi = 0.0_ReKi !technically would be acos( 0.0_ReKi ), but with no wind, we can pick a nicer angle to use later in tan(chi/2)
+   else
+      chi = acos( min(1.0_R8Ki, max(-1.0_R8Ki, dot_product(u%x_hat_disk, v_w) / denom)) )
+   end if
+   
+end function CalculateChiAngle
 !----------------------------------------------------------------------------------------------------------------------------------
 subroutine BEMT_CalcContStateDeriv( t, u, p, x, xd, z, OtherState, m, dxdt, AFInfo, ErrStat, ErrMsg )
 ! Tight coupling routine for computing derivatives of continuous states

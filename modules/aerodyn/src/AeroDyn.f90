@@ -2560,7 +2560,8 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
         signofAngle = sign(1.0_ReKi,SkewVec(3))
       endif
 
-      !m%BEMT_u(indx)%chi0 = sign( m%BEMT_u(indx)%chi0, signOfAngle )
+      m%BEMT_u(indx)%chi0 = sign( m%BEMT_u(indx)%chi0, signOfAngle )
+
    end if
 
 
@@ -2570,7 +2571,6 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
    if (p%AeroProjMod==APM_BEM_NoSweepPitchTwist .or. p%AeroProjMod==APM_LiftingLine) then
 
       m%BEMT_u(indx)%psi = Azimuth
-
    elseif (p%AeroProjMod==APM_BEM_Polar) then
 
       do k=1,p%NumBlades
@@ -2580,6 +2580,8 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
          ! NOTE: EB, this might need improvements (express wrt hub, also deal with case hubRad=0). This is likely not psi_skew. 
          theta = -EulerExtract( transpose(orientationBladeAzimuth(:,:,1)) )
          m%BEMT_u(indx)%psi(k) = theta(1)
+   end do !k=blades
+         
          ! Find the most-downwind azimuth angle needed by the skewed wake correction model
 	     windCrossDisk = cross_product( x_hat_wind, x_hat_disk )
 	     windCrossDiskMag = TwoNorm( windCrossDisk )
@@ -2598,7 +2600,7 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
 	        m%BEMT_u(indx)%psiSkewOffset = theta(1)+PiBy2  ! cross-product of wind vector and rotor axis will lead downwind blade azimuth by 90 degrees
 	     end if
          
-      end do !k=blades
+
    else
       call WrScr('AeroProjMod not supported - should never happen')
       STOP
@@ -3997,6 +3999,7 @@ SUBROUTINE Init_BEMTmodule( InputFileData, RotInputFileData, u_AD, u, p, p_AD, x
    InitInp%SumPrint      = InputFileData%SumPrint
    InitInp%RootName      = p%RootName
    InitInp%BEM_Mod       = p%AeroBEM_Mod
+
 
    if (p%AeroBEM_Mod==-1) then
       print*,'>>> AeroDyn: BEM_Mod is -1, using default BEM_Mod based on projection'
