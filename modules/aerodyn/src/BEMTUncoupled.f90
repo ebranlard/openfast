@@ -153,7 +153,7 @@ contains
       orientation(1) = toeAngle
       orientation(2) = cantAngle
       orientation(3) = -theta
-      rotMat = EulerConstruct( orientation )
+      rotMat = EulerConstruct( orientation ) ! = R_ap: from polar to airfoil
       
       ! unit vector normal to the chord line in the airfoil plane
       afNormalVec = rotMat(1,:)
@@ -185,9 +185,13 @@ contains
       real(ReKi)                :: afRadialVec(3)
       real(ReKi)                :: inflowVec(3)
       real(ReKi)                :: inflowVecInAirfoilPlane(3)
+      real(ReKi)                :: inflowVec_p(3) ! Inflow in system p
+      real(ReKi)                :: inflowVec_a(3) ! Inflow in system a
       real(ReKi)                :: signOfAngle 
       real(ReKi)                :: numer, denom, ratio
       real(ReKi)                :: phiN
+      real(ReKi)                :: R_ap(3,3)
+      real(ReKi)                :: AoA2
       
       if (BEM_Mod==BEMMod_2D) then
          AoA   =  phi - theta  ! angle of attack
@@ -199,8 +203,28 @@ contains
          else if (BEM_Mod==BEMMod_3D_NoPhiProj) then
             phiN = phi
          else if (BEM_Mod==BEMMod_3D_Manu) then
-            print*,'>>> PHI MANU TODO'
-            STOP
+
+            !R_ap: from polar to airfoil
+            R_ap(1,:) = afNormalVec 
+            R_ap(2,:) = afAxialVec
+            R_ap(3,:) = afRadialVec
+
+
+            phiN = phi
+            phiN = getNewPhi(phi,cantAngle)
+! 
+!             inflowVec_p(1) = sin( phiN)
+!             inflowVec_p(2) = cos( phiN)
+!             inflowVec_p(3) = 0.0_Reki
+! 
+!             inflowVec_a = matmul(R_ap, inflowVec_p)
+!             inflowVec_a(3) = 0 
+!             denom = TwoNorm( inflowVec_a )
+!             inflowVec_a = inflowVec_a/(denom)
+! 
+!             AoA = atan2(inflowVec_a(1), inflowVec_a(2))
+
+
          else
             print*,'>>> SHOULD NEVER HAPPEN'
             STOP
@@ -705,6 +729,7 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
    real(R8Ki)            :: sphi, cphi        ! sin(phi), cos(phi)
    real(R8Ki)            :: k, kp             ! non-dimensional parameters 
    real(R8Ki)            :: VxCorrected, kCorrectionFactor
+   real(R8Ki)            :: VxCorrected2
    real(R8Ki)            :: effectiveYaw !
    
    
@@ -741,27 +766,33 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
    if (BEM_Mod==BEMMod_3D .or. BEM_Mod==BEMMod_3D_NoPhiProj) then
 
       VxCorrected = Vx*cos(cantAngle)+xVelCorr
+      VxCorrected2 = VxCorrected
       kCorrectionFactor  = 1.0_R8Ki + xVelCorr/(Vx*cos(real(cantAngle,R8Ki)))
+      k = k*kCorrectionFactor**2
 
    elseif (BEM_Mod==BEMMod_3D_NoVxCorr) then
-      VxCorrected = Vx*cos(cantAngle)
+      VxCorrected = Vx*cos(cantAngle) ! This is Vxa
+      VxCorrected2 = VxCorrected
       kCorrectionFactor  = 1.0_R8Ki
+      k = k*kCorrectionFactor**2
 
    elseif (BEM_Mod==BEMMod_3D_Manu) then
-      print*,'>>>> TODO MANU induction factors2 '
-      STOP
+      !VxCorrected = Vx ! NOTE: this is Vxp
+      VxCorrected = Vx 
+      VxCorrected2 = Vx
+      kCorrectionFactor  = 1.0_R8Ki
+      k = sigma_p*cn/(4.0_R8Ki*F*sphi*sphi) /drdz
    else
       print*,'>>>> SHould never happen induction factors2 '
       STOP
    endif
 
-   k = k*kCorrectionFactor**2
 
    !k = sign( k, real(phi,R8Ki) )
    k0 = a0(effectiveYaw) / (1.0-a0(effectiveYaw))
    if (.not.MomentumCorr) then 
        if (k <= k0 ) then
-           if (VxCorrected > 0.0) then
+           if (VxCorrected2 > 0.0) then
                a = k/(k+1.0)
            else
                a = k/(k-1.0)
@@ -780,7 +811,7 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
    ! compute tangential induction factor:
    !.....................................................
    if (wakerotation) then 
-      call getTangentialInduction(a, cphi, sphi, Vx, F, kCorrectionFactor, sigma_p, ct, VxCorrected, effectiveYaw, H, MomentumCorr, ap, kp)
+      call getTangentialInduction(a, cphi, sphi, Vx, F, kCorrectionFactor, sigma_p, ct, VxCorrected2, effectiveYaw, H, MomentumCorr, ap, kp)
    else 
       
       ! we're not computing tangential induction:       
@@ -1131,8 +1162,7 @@ real(reKi) function getHubTipLossCorrection(BEM_Mod, useHubLoss, useTipLoss, hub
       else if (BEM_Mod==BEMMod_3D_NoPhiProj) then
          phiN = phi
       else if (BEM_Mod==BEMMod_3D_Manu) then
-         print*,'>>> PHI MANU TODO'
-         STOP
+         phiN = phi
       else
          print*,'>>> SHOULD NEVER HAPPEN'
          STOP
