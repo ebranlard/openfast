@@ -193,7 +193,17 @@ contains
       else
          ! get airfoil orientation vectors
          call getAirfoilOrientation( theta, cantAngle, toeAngle ,afAxialVec, afNormalVec, afRadialVec )
-         phiN = getNewPhi(phi,cantAngle)
+         if (BEM_Mod==BEMMod_3D .or. BEM_Mod==BEMMod_3D_NoVxCorr) then
+            phiN = getNewPhi(phi,cantAngle)
+         else if (BEM_Mod==BEMMod_3D_NoPhiProj) then
+            phiN = phi
+         else if (BEM_Mod==BEMMod_3D_Manu) then
+            print*,'>>> PHI MANU TODO'
+            STOP
+         else
+            print*,'>>> SHOULD NEVER HAPPEN'
+            STOP
+         endif
       
          ! Create inflow vector
          inflowVec(1) = sin( phiN)
@@ -384,7 +394,7 @@ real(ReKi) function BEMTU_InductionWithResidual(p, u, i, j, phi, AFInfo, IsValid
           call inductionFactors0(p%numBlades, u%rlocal(i,j), p%chord(i,j), phi, Cx, Cy, u%Vx(i,j), u%Vy(i,j), F, p%useTanInd, &
                               ResidualVal, axInduction, tanInduction, IsValidSolution)
       else
-          call inductionFactors2( p%numBlades, u%rlocal(i,j), p%chord(i,j), phi, Cx, Cy, u%Vx(i,j), u%Vy(i,j), u%drdz(i,j), u%cantAngle(i,j), F, u%CHI0, p%useTanInd, &
+          call inductionFactors2(p%BEM_Mod, p%numBlades, u%rlocal(i,j), p%chord(i,j), phi, Cx, Cy, u%Vx(i,j), u%Vy(i,j), u%drdz(i,j), u%cantAngle(i,j), F, u%CHI0, p%useTanInd, &
                               ResidualVal, axInduction, tanInduction, p%MomentumCorr, u%xVelCorr(i,j), IsValidSolution, k_out, kp_out )
 
       endif
@@ -663,12 +673,13 @@ subroutine getTangentialInduction(a, cphi, sphi, Vx, F, kCorrectionFactor, sigma
 end subroutine getTangentialInduction
 !-----------------------------------------------------------------------------------------
 !> This subroutine computes the induction factors (a) and (ap) along with the residual (fzero)
-subroutine inductionFactors2( B, r, chord, phi, cn, ct, Vx, Vy, drdz,cantAngle, F, CHI0, wakerotation, &
+subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,cantAngle, F, CHI0, wakerotation, &
    fzero_out, a_out, ap_out, MomentumCorr, xVelCorr, IsValidSolution, k_out, kp_out )
 
    implicit none
 
    ! in
+   integer(IntKi), intent(in   ) :: BEM_Mod
    integer,    intent(in) :: B              !< number of blades [p%numBlades]
    real(ReKi), intent(in) :: r              !< local radial position [u%rlocal]
    real(ReKi), intent(in) :: chord          !< chord [p%chord]
@@ -732,8 +743,23 @@ subroutine inductionFactors2( B, r, chord, phi, cn, ct, Vx, Vy, drdz,cantAngle, 
    k = sigma_p*cn/(4.0_R8Ki*F*sphi*sphi)*drdz
 
    ! "corrections"
-   VxCorrected = Vx*cos(cantAngle)+xVelCorr
-   kCorrectionFactor  = 1.0_R8Ki + xVelCorr/(Vx*cos(real(cantAngle,R8Ki)))
+   if (BEM_Mod==BEMMod_3D .or. BEM_Mod==BEMMod_3D_NoPhiProj) then
+
+      VxCorrected = Vx*cos(cantAngle)+xVelCorr
+      kCorrectionFactor  = 1.0_R8Ki + xVelCorr/(Vx*cos(real(cantAngle,R8Ki)))
+
+   elseif (BEM_Mod==BEMMod_3D_NoVxCorr) then
+      VxCorrected = Vx*cos(cantAngle)
+      kCorrectionFactor  = 1.0_R8Ki
+
+   elseif (BEM_Mod==BEMMod_3D_Manu) then
+      print*,'>>>> TODO MANU induction factors2 '
+      STOP
+   else
+      print*,'>>>> SHould never happen induction factors2 '
+      STOP
+   endif
+
    k = k*kCorrectionFactor**2
 
    !k = sign( k, real(phi,R8Ki) )
@@ -760,38 +786,6 @@ subroutine inductionFactors2( B, r, chord, phi, cn, ct, Vx, Vy, drdz,cantAngle, 
    !.....................................................
    if (wakerotation) then 
       call getTangentialInduction(a, cphi, sphi, Vx, F, kCorrectionFactor, sigma_p, ct, VxCorrected, effectiveYaw, H, MomentumCorr, ap, kp)
-   
-!       ! compute tangential induction factor
-!       if ( EqualRealNos(cphi,0.0_R8Ki) ) then
-!          
-!          ap = -1.0_R8Ki
-!          kp =  sign(InductionLimit, ct*sphi)*sign(1.0_R8Ki,real(Vx,R8Ki))
-!          
-!       else
-!          !H = smoothStep( real(a,ReKi), 0.8, 1.0, 1.0, 0.0 ) + smoothStep( real(a,ReKi), 1.0, 0.0, 1.2, 1.0 )
-!          !kp = sigma_p*( cl*sphi - H*cd*cphi )/( 4.0*F*sphi*cphi )*kCorrectionFactor
-!          if (MomentumCorr) then             
-!              if (equalrealnos(a,1.0_R8Ki)) then
-!                  kp = 0.0_R8Ki !H*sigma_p*ct/( 4.0*F*sphi*cphi )*(kCorrectionFactor)
-!              else
-!                  kp = H*sigma_p*ct/( 4.0*F*sphi*cphi )*(kCorrectionFactor)/sqrt(1+(tan(effectiveYaw)/(1.0_ReKi-a))**2)            
-!              endif             
-!          else
-!              kp = H*sigma_p*ct/( 4.0*F*sphi*cphi )*kCorrectionFactor
-!          endif
-!          
-!          if ( VxCorrected < 0.0_ReKi ) then
-!             kp = -kp
-!          endif
-!       
-!          if ( EqualRealNos(kp,1.0_R8Ki) ) then
-!             ap = sign(InductionLimit, 1.0_R8Ki-kp)
-!          else
-!             ap = kp/(1.0_R8Ki-kp)
-!          end if
-! 
-!       endif
-            
    else 
       
       ! we're not computing tangential induction:       
@@ -1102,7 +1096,17 @@ real(reKi) function getHubTipLossCorrection(BEM_Mod, useHubLoss, useTipLoss, hub
    else
       !sinBeta = sin(cantAngle)
       !phiN = acos(sqrt(sinBeta**2 + ((cos(cantAngle)**2) * (cos(phi)**2))))
-      phiN = getNewPhi(phi,cantAngle)
+      if (BEM_Mod==BEMMod_3D .or. BEM_Mod==BEMMod_3D_NoVxCorr) then
+         phiN = getNewPhi(phi,cantAngle)
+      else if (BEM_Mod==BEMMod_3D_NoPhiProj) then
+         phiN = phi
+      else if (BEM_Mod==BEMMod_3D_Manu) then
+         print*,'>>> PHI MANU TODO'
+         STOP
+      else
+         print*,'>>> SHOULD NEVER HAPPEN'
+         STOP
+      endif
       sphiN = sin(phiN)
         
       if (.not. EqualRealNos(sphiN,0.0_ReKi)) then

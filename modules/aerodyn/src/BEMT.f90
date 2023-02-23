@@ -175,7 +175,8 @@ subroutine BEMT_SetParameters( InitInp, p, errStat, errMsg )
    p%MomentumCorr   = InitInp%MomentumCorr
    p%BEM_Mod        = InitInp%BEM_Mod
    !call WrScr('>>>> BEM_Mod '//trim(num2lstr(p%BEM_Mod)))
-   if ((p%BEM_Mod/=BEMMod_2D .and. p%BEM_Mod/=BEMMod_3D )) then
+   !if ((p%BEM_Mod/=BEMMod_2D .and. p%BEM_Mod/=BEMMod_3D )) then
+   if (.not.(ANY( p%BEM_Mod == (/BEMMod_2D, BEMMod_3D, BEMMod_3D_NoVxCorr, BEMMod_3D_NoPhiProj, BEMMod_3D_Manu/)))) then
       call SetErrStat( ErrID_Fatal, 'BEM_Mod needs to be 0 or 2 for now', errStat, errMsg, RoutineName )
       return
    endif

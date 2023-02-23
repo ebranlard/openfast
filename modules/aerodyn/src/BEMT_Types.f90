@@ -42,6 +42,9 @@ IMPLICIT NONE
     INTEGER(IntKi), PUBLIC, PARAMETER  :: SkewMod_PittPeters_Cont = 4      ! Pitt/Peters continuous formulation [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: BEMMod_2D = 0      ! 2D BEM assuming Cx, Cy, phi, L, D are in the same plane [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: BEMMod_3D = 2      ! 3D BEM assuming a momentum balance system, and an airfoil system [-]
+    INTEGER(IntKi), PUBLIC, PARAMETER  :: BEMMod_3D_NoVxCorr = 201      ! Same as 2, no Vx Corr [-]
+    INTEGER(IntKi), PUBLIC, PARAMETER  :: BEMMod_3D_NoPhiProj = 202      ! Same as 2, no PhiProj [-]
+    INTEGER(IntKi), PUBLIC, PARAMETER  :: BEMMod_3D_Manu = 300      ! Emmanuels implementation [-]
 ! =========  BEMT_InitInputType  =======
   TYPE, PUBLIC :: BEMT_InitInputType
     REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: chord      !< Chord length at node [m]

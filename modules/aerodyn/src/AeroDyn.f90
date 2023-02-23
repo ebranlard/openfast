@@ -337,7 +337,8 @@ subroutine AD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
    p%SkewMod = InputFileData%SkewMod
    do iR = 1, nRotors
       p%rotors(iR)%AeroProjMod = InitInp%rotors(iR)%AeroProjMod
-      print*,'>>> AeroDyn projmod',p%rotors(iR)%AeroProjMod
+      p%rotors(iR)%AeroBEM_Mod = InitInp%rotors(iR)%AeroBEM_Mod
+      print*,'>>> AeroDyn: ProjMod, BEM_Mod:',p%rotors(iR)%AeroProjMod, p%rotors(iR)%AeroBEM_Mod
       call SetParameters( InitInp, InputFileData, InputFileData%rotors(iR), p%rotors(iR), p, ErrStat2, ErrMsg2 )
       if (Failed()) return;
    enddo
@@ -3995,14 +3996,20 @@ SUBROUTINE Init_BEMTmodule( InputFileData, RotInputFileData, u_AD, u, p, p_AD, x
    InitInp%MomentumCorr  = .FALSE. ! TODO EB
    InitInp%SumPrint      = InputFileData%SumPrint
    InitInp%RootName      = p%RootName
-   if (p%AeroProjMod == APM_BEM_NoSweepPitchTwist) then
-      InitInp%BEM_Mod    = BEMMod_2D
-   else if (p%AeroProjMod == APM_BEM_Polar) then
-      InitInp%BEM_Mod    = BEMMod_3D
-   else
-      InitInp%BEM_Mod    = -1
-      call SetErrStat(ErrID_Fatal, "AeroProjMod needs to be 0 or 2 when used with BEM", ErrStat, ErrMsg, RoutineName)   
+   InitInp%BEM_Mod       = p%AeroBEM_Mod
+
+   if (p%AeroBEM_Mod==-1) then
+      print*,'>>> AeroDyn: BEM_Mod is -1, using default BEM_Mod based on projection'
+      if (p%AeroProjMod == APM_BEM_NoSweepPitchTwist) then
+         InitInp%BEM_Mod    = BEMMod_2D
+      else if (p%AeroProjMod == APM_BEM_Polar) then
+         InitInp%BEM_Mod    = BEMMod_3D
+      else
+         InitInp%BEM_Mod    = -1
+         call SetErrStat(ErrID_Fatal, "AeroProjMod needs to be 0 or 2 when used with BEM", ErrStat, ErrMsg, RoutineName)   
+      endif
    endif
+   print*,'>>> AeroDyn: ProjMod, BEM_Mod', p%AeroProjMod, InitInp%BEM_Mod
       ! remove the ".AD" from the RootName
    k = len_trim(InitInp%RootName)
    if (k>3) then

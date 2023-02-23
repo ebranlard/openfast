@@ -100,6 +100,7 @@ IMPLICIT NONE
     REAL(R8Ki) , DIMENSION(1:3)  :: NacellePosition      !< X-Y-Z reference position of nacelle [m]
     REAL(R8Ki) , DIMENSION(1:3,1:3)  :: NacelleOrientation      !< DCM reference orientation of nacelle [-]
     INTEGER(IntKi)  :: AeroProjMod = 1      !< Flag to switch between different projection models [-]
+    INTEGER(IntKi)  :: AeroBEM_Mod = -1      !< Flag to switch between different BEM Model [-]
   END TYPE RotInitInputType
 ! =======================
 ! =========  AD_InitInputType  =======
@@ -410,6 +411,7 @@ IMPLICIT NONE
     REAL(ReKi)  :: WtrDpth      !< Water depth [m]
     REAL(ReKi)  :: MSL2SWL      !< Offset between still-water level and mean sea level [m]
     INTEGER(IntKi)  :: AeroProjMod = 1      !< Flag to switch between different projection models [-]
+    INTEGER(IntKi)  :: AeroBEM_Mod = -1      !< Flag to switch between different BEM Model [-]
     INTEGER(IntKi)  :: NumOuts      !< Number of parameters in the output list (number of outputs requested) [-]
     CHARACTER(1024)  :: RootName      !< RootName for writing output files [-]
     TYPE(OutParmType) , DIMENSION(:), ALLOCATABLE  :: OutParam      !< Names and units (and other characteristics) of all requested output parameters [-]
@@ -1430,6 +1432,7 @@ ENDIF
     DstRotInitInputTypeData%NacellePosition = SrcRotInitInputTypeData%NacellePosition
     DstRotInitInputTypeData%NacelleOrientation = SrcRotInitInputTypeData%NacelleOrientation
     DstRotInitInputTypeData%AeroProjMod = SrcRotInitInputTypeData%AeroProjMod
+    DstRotInitInputTypeData%AeroBEM_Mod = SrcRotInitInputTypeData%AeroBEM_Mod
  END SUBROUTINE AD_CopyRotInitInputType
 
  SUBROUTINE AD_DestroyRotInitInputType( RotInitInputTypeData, ErrStat, ErrMsg, DEALLOCATEpointers )
@@ -1512,6 +1515,7 @@ ENDIF
       Db_BufSz   = Db_BufSz   + SIZE(InData%NacellePosition)  ! NacellePosition
       Db_BufSz   = Db_BufSz   + SIZE(InData%NacelleOrientation)  ! NacelleOrientation
       Int_BufSz  = Int_BufSz  + 1  ! AeroProjMod
+      Int_BufSz  = Int_BufSz  + 1  ! AeroBEM_Mod
   IF ( Re_BufSz  .GT. 0 ) THEN 
      ALLOCATE( ReKiBuf(  Re_BufSz  ), STAT=ErrStat2 )
      IF (ErrStat2 /= 0) THEN 
@@ -1607,6 +1611,8 @@ ENDIF
       END DO
     END DO
     IntKiBuf(Int_Xferred) = InData%AeroProjMod
+    Int_Xferred = Int_Xferred + 1
+    IntKiBuf(Int_Xferred) = InData%AeroBEM_Mod
     Int_Xferred = Int_Xferred + 1
  END SUBROUTINE AD_PackRotInitInputType
 
@@ -1725,6 +1731,8 @@ ENDIF
       END DO
     END DO
     OutData%AeroProjMod = IntKiBuf(Int_Xferred)
+    Int_Xferred = Int_Xferred + 1
+    OutData%AeroBEM_Mod = IntKiBuf(Int_Xferred)
     Int_Xferred = Int_Xferred + 1
  END SUBROUTINE AD_UnPackRotInitInputType
 
@@ -13455,6 +13463,7 @@ ENDIF
     DstRotParameterTypeData%WtrDpth = SrcRotParameterTypeData%WtrDpth
     DstRotParameterTypeData%MSL2SWL = SrcRotParameterTypeData%MSL2SWL
     DstRotParameterTypeData%AeroProjMod = SrcRotParameterTypeData%AeroProjMod
+    DstRotParameterTypeData%AeroBEM_Mod = SrcRotParameterTypeData%AeroBEM_Mod
     DstRotParameterTypeData%NumOuts = SrcRotParameterTypeData%NumOuts
     DstRotParameterTypeData%RootName = SrcRotParameterTypeData%RootName
 IF (ALLOCATED(SrcRotParameterTypeData%OutParam)) THEN
@@ -13799,6 +13808,7 @@ ENDIF
       Re_BufSz   = Re_BufSz   + 1  ! WtrDpth
       Re_BufSz   = Re_BufSz   + 1  ! MSL2SWL
       Int_BufSz  = Int_BufSz  + 1  ! AeroProjMod
+      Int_BufSz  = Int_BufSz  + 1  ! AeroBEM_Mod
       Int_BufSz  = Int_BufSz  + 1  ! NumOuts
       Int_BufSz  = Int_BufSz  + 1*LEN(InData%RootName)  ! RootName
   Int_BufSz   = Int_BufSz   + 1     ! OutParam allocated yes/no
@@ -14321,6 +14331,8 @@ ENDIF
     ReKiBuf(Re_Xferred) = InData%MSL2SWL
     Re_Xferred = Re_Xferred + 1
     IntKiBuf(Int_Xferred) = InData%AeroProjMod
+    Int_Xferred = Int_Xferred + 1
+    IntKiBuf(Int_Xferred) = InData%AeroBEM_Mod
     Int_Xferred = Int_Xferred + 1
     IntKiBuf(Int_Xferred) = InData%NumOuts
     Int_Xferred = Int_Xferred + 1
@@ -15000,6 +15012,8 @@ ENDIF
     OutData%MSL2SWL = ReKiBuf(Re_Xferred)
     Re_Xferred = Re_Xferred + 1
     OutData%AeroProjMod = IntKiBuf(Int_Xferred)
+    Int_Xferred = Int_Xferred + 1
+    OutData%AeroBEM_Mod = IntKiBuf(Int_Xferred)
     Int_Xferred = Int_Xferred + 1
     OutData%NumOuts = IntKiBuf(Int_Xferred)
     Int_Xferred = Int_Xferred + 1
