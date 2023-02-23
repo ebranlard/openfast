@@ -897,7 +897,7 @@ subroutine BEMT_UpdateStates( t, n, u, utimes, p, x, xd, z, OtherState, AFInfo, 
                call calculate_Inductions_from_DBEMT_AllNodes(TimeIndex_t_plus_dt, uTimes(TimeIndex_t_plus_dt), u(TimeIndex_t_plus_dt), p, x, OtherState, m, m%axInduction, m%tanInduction)
             end if
          
-            call ApplySkewedWakeCorrection_AllNodes(p, u(TimeIndex_t_plus_dt), m, m%axInduction, m%chi)
+            call ApplySkewedWakeCorrection_AllNodes(p, u(TimeIndex_t_plus_dt), m, x, z%phi, OtherState, m%axInduction, m%chi)
 
             !............................................
             ! If TSR is too low, (start to) turn off induction
@@ -1478,7 +1478,7 @@ subroutine BEMT_CalcOutput_Inductions( InputIndex, t, CalculateDBEMTInputs, Appl
             !............................................
             ! Apply skewed wake correction to the axial induction (axInduction)
             !............................................
-            call ApplySkewedWakeCorrection_AllNodes(p, u, m, axInduction, chi)
+            call ApplySkewedWakeCorrection_AllNodes(p, u, m, x, phi, OtherState, axInduction, chi)
             
             !............................................
             ! If TSR is too low, (start to) turn off induction
@@ -1525,24 +1525,37 @@ subroutine calculate_Inductions_from_DBEMT_AllNodes(InputIndex, t, u, p, x, Othe
 
 end subroutine calculate_Inductions_from_DBEMT_AllNodes
 !----------------------------------------------------------------------------------------------------------------------------------
-subroutine ApplySkewedWakeCorrection_AllNodes(p, u, m, axInduction, chi)
+subroutine ApplySkewedWakeCorrection_AllNodes(p, u, m, x, phi, OtherState, axInduction, chi)
    type(BEMT_InputType),           intent(in   )  :: u           ! Inputs at Time t
    type(BEMT_ParameterType),       intent(in   )  :: p           ! Parameters
    type(BEMT_MiscVarType),         intent(inout)  :: m           ! Misc/optimization variables
+   type(BEMT_ContinuousStateType), intent(in   )  :: x           ! continuous states (for filter on V_w)
+   REAL(ReKi),                     intent(in   )  :: phi(:,:)    ! phi at which this is getting applied (for calculation of tip/hub losses)
+   type(BEMT_OtherStateType),      intent(in   )  :: OtherState  ! Other states at t
    REAL(ReKi),                     intent(inout)  :: axInduction(:,:)
    REAL(ReKi),                     intent(inout)  :: chi(:,:)    ! value used in skewed wake correction
 
-   integer(IntKi)                                 :: i                                               ! Generic index
-   integer(IntKi)                                 :: j                                               ! Loops through nodes / elements
+   integer(IntKi)                                 :: i           ! Generic index
+   integer(IntKi)                                 :: j           ! Loops through nodes / elements
+   real(ReKi)                                     :: F           ! correction factor
+   real(ReKi)                                     :: X_chi       ! value for chi
    
    !............................................
    ! Apply skewed wake correction to the axial induction (y%axInduction)
    !............................................
-   if ( p%skewWakeMod == SkewMod_PittPeters ) then
+   if (p%skewWakeMod == SkewMod_PittPeters) then
+      if (p%BEM_Mod==BEMMod_2D) then
+         ! do nothing
+      else
+         X_chi = CalculateChiAngle(p, u, m, x, OtherState, .false.)
+         chi = X_chi ! initialize in case of fixed inductions
+      endif
+
       do j = 1,p%numBlades ! Loop through all blades
          do i = 1,p%numBladeNodes ! Loop through the blade nodes / elements
             if ( .not. p%FixedInductions(i,j) ) then
-               call ApplySkewedWakeCorrection( p%yawCorrFactor, u%psi(j), u%chi0, u%rlocal(i,j)/m%Rtip(j), axInduction(i,j), chi(i,j), m%FirstWarn_Skew )
+               F = getHubTipLossCorrection(p%BEM_Mod, p%useHubLoss, p%useTipLoss, p%hubLossConst(i,j), p%tipLossConst(i,j), phi(i,j), u%cantAngle(i,j) )
+               call ApplySkewedWakeCorrection( p%BEM_Mod, p%skewWakeMod, p%yawCorrFactor, F, u%psi(j), u%psiSkewOffset, u%chi0, u%rlocal(i,j)/m%Rtip(j), axInduction(i,j), chi(i,j), m%FirstWarn_Skew )
             end if ! .not. p%FixedInductions (special case for tip and/or hub loss)
          enddo    ! I - Blade nodes / elements
       enddo       ! J - All blades

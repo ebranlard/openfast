@@ -31,7 +31,7 @@ module BEMTUnCoupled
 
    implicit none
    
-   real(ReKi),     public, parameter  :: BEMT_MaxInduction(2) = (/1.5_ReKi, 1.0_ReKi /)  ! largest magnitude of axial (1) and tangential (2) induction factors
+   real(ReKi),     public, parameter  :: BEMT_MaxInduction(2) = (/ 1.5_ReKi, 1.0_ReKi /)  ! largest magnitude of axial (1) and tangential (2) induction factors
    real(ReKi),     public, parameter  :: BEMT_MinInduction(2) = -1.0_ReKi
 
    real(ReKi),     public, parameter  :: BEMT_lowerBoundTSR = 1.0_ReKi
@@ -55,6 +55,7 @@ module BEMTUnCoupled
    public :: Transform_ClCdCm_to_CxCyCzCmxCmyCmz
    public :: getHubTipLossCorrection
    public :: limitInductionFactors
+   public :: smoothStep
    public :: GetEulerAnglesFromOrientation
    
    public :: VelocityIsZero
@@ -126,8 +127,8 @@ contains
 
 !bjj: check that the cantAngle modification works for UA!!!!
    
-      v_ac(1) = (Vx*cos(cantAngle)+xVelCorr)*(1.0_ReKi-axInduction)
-      v_ac(2) = Vy*(1.0_ReKi+tanInduction)
+      v_ac(1) = (Vx*cos(cantAngle)+xVelCorr)*(1.0_ReKi - axInduction)
+      v_ac(2) =                           Vy*(1.0_ReKi + tanInduction)
 
       Vrel    = TwoNorm(v_ac)
 
@@ -410,10 +411,14 @@ real(ReKi) function BEMTU_InductionWithResidual(p, u, i, j, phi, AFInfo, IsValid
    
 end function BEMTU_InductionWithResidual
 !-----------------------------------------------------------------------------------------
-subroutine ApplySkewedWakeCorrection( yawCorrFactor, azimuth, chi0, tipRatio, a, chi, FirstWarn )
+subroutine ApplySkewedWakeCorrection(BEM_Mod, SkewMod, yawCorrFactor, F, azimuth, azimuthOffset, chi0, tipRatio, a, chi, FirstWarn )
    
+   integer(IntKi),            intent(in   ) :: BEM_Mod
+   integer(IntKi),            intent(in   ) :: SkewMod
    real(ReKi),                intent(in   ) :: yawCorrFactor ! set to 15*pi/32 previously; now allowed to be input (to better match data) 
+   real(ReKi),                intent(in   ) :: F             ! tip/hub loss factor
    real(ReKi),                intent(in   ) :: azimuth
+   real(ReKi),                intent(in   ) :: azimuthOffset ! offset angle of most downwind blade position
    real(ReKi),                intent(in   ) :: chi0 
    real(ReKi),                intent(in   ) :: tipRatio            ! r/Rtip 
    real(ReKi),                intent(inout) :: a 
@@ -426,8 +431,13 @@ subroutine ApplySkewedWakeCorrection( yawCorrFactor, azimuth, chi0, tipRatio, a,
    
    
    ! Skewed wake correction
-      
-   chi = (0.6_ReKi*a + 1.0_ReKi)*chi0
+   IF (.true.) then
+      if(BEM_Mod==BEMMod_2D) then
+         chi = (0.6_ReKi*a + 1.0_ReKi)*chi0
+      else
+         chi = (0.6_ReKi*a + 1.0_ReKi)*abs(chi0)
+      endif
+   END IF
       
    call MPi2Pi( chi ) ! make sure chi is in [-pi, pi] before testing if it's outside a valid range
       
@@ -446,7 +456,14 @@ subroutine ApplySkewedWakeCorrection( yawCorrFactor, azimuth, chi0, tipRatio, a,
    end if
       
       !bjj: modified 22-Sep-2015: RRD recommends 32 instead of 64 in the denominator (like AD14)
-   yawCorr = ( yawCorrFactor * yawCorr_tan * (tipRatio) * sin(azimuth) ) ! bjj: note that when chi gets close to +/-pi this blows up
+   ! TODO TODO TODO FIGURE THIS OUT
+   if(BEM_Mod==BEMMod_2D) then
+      ! ADLEG:
+      yawCorr = ( yawCorrFactor     * yawCorr_tan * (tipRatio) * sin(azimuth) ) ! bjj: note that when chi gets close to +/-pi this blows up
+   else
+      ! ADENV:
+      yawCorr = ( yawCorrFactor * F * yawCorr_tan * (tipRatio) * cos(azimuth-azimuthOffset) ) ! bjj: note that when chi gets close to +/-pi this blows up
+   endif
       
    a = a * (1.0 +  yawCorr)
    

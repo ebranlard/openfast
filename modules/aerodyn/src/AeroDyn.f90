@@ -1030,7 +1030,7 @@ subroutine Init_u( u, p, p_AD, InputFileData, InitInp, errStat, errMsg )
       
    u%InflowOnBlade = 0.0_ReKi
    u%UserProp      = 0.0_ReKi
-   u%InflowOnHub = 0.0_ReKi
+   u%InflowOnHub   = 0.0_ReKi
    u%InflowOnNacelle = 0.0_ReKi
    u%InflowOnTailFin = 0.0_ReKi
    
@@ -2560,8 +2560,9 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
         signofAngle = sign(1.0_ReKi,SkewVec(3))
       endif
 
-      m%BEMT_u(indx)%chi0 = sign( m%BEMT_u(indx)%chi0, signOfAngle )
-
+      if (p%AeroBEM_Mod /= BEMMod_2D) then
+         m%BEMT_u(indx)%chi0 = sign( m%BEMT_u(indx)%chi0, signOfAngle )
+      endif
    end if
 
 
@@ -4012,6 +4013,7 @@ SUBROUTINE Init_BEMTmodule( InputFileData, RotInputFileData, u_AD, u, p, p_AD, x
          call SetErrStat(ErrID_Fatal, "AeroProjMod needs to be 0 or 2 when used with BEM", ErrStat, ErrMsg, RoutineName)   
       endif
    endif
+   p%AeroBEM_Mod = InitInp%BEM_Mod ! Very important, for consistency
    print*,'>>> AeroDyn: ProjMod, BEM_Mod', p%AeroProjMod, InitInp%BEM_Mod
       ! remove the ".AD" from the RootName
    k = len_trim(InitInp%RootName)
