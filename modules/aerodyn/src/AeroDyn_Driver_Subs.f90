@@ -983,7 +983,8 @@ subroutine Dvr_ReadInputFile(fileName, dvr, errStat, errMsg )
          wt%BEM_Mod = -1
       else
          call ParseVar(FileInfo_In, CurLine, 'BEM_Mod'//sWT    , wt%BEM_Mod     , errStat2, errMsg2, unEc); if(Failed()) return
-         call WrScr('>>> Driver: ProjMod and BEM_Mod are present in AeroDyn driver input file. ProjMod: '//trim(num2lstr(wt%projMod))//' BEM_Mod: '//trim(num2lstr(wt%BEM_Mod)))
+        ! call WrScr('>>> Driver: ProjMod and BEM_Mod are present in AeroDyn driver input file. ProjMod: '//trim(num2lstr(wt%projMod))//' BEM_Mod: '//trim(num2lstr(wt%BEM_Mod)))
+         print*,'>>> Driver:  ProjMod, BEM_Mod:',wt%ProjMod, wt%BEM_Mod
 
       endif
       call ParseVar(FileInfo_In, CurLine, 'BasicHAWTFormat'//sWT    , wt%basicHAWTFormat       , errStat2, errMsg2, unEc); if(Failed()) return

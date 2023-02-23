@@ -2581,26 +2581,26 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
          ! NOTE: EB, this might need improvements (express wrt hub, also deal with case hubRad=0). This is likely not psi_skew. 
          theta = -EulerExtract( transpose(orientationBladeAzimuth(:,:,1)) )
          m%BEMT_u(indx)%psi(k) = theta(1)
-   end do !k=blades
+      end do !k=blades
          
-         ! Find the most-downwind azimuth angle needed by the skewed wake correction model
-	     windCrossDisk = cross_product( x_hat_wind, x_hat_disk )
-	     windCrossDiskMag = TwoNorm( windCrossDisk )
-	     if (windCrossDiskMag <= 0.01_ReKi) then
-	         m%BEMT_u(indx)%psiSkewOffset = PiBy2
-	     else
-	        ! Assemble blade azimuth unit vectors and orientation matrix
-	        z_vec = windCrossDisk / windCrossDiskMag
-	        x_vec = x_hat_disk
-	        y_vec = cross_product( z_vec, x_vec )
-	        orientation(1,:) = x_vec
-	        orientation(2,:) = y_vec
-	        orientation(3,:) = z_vec
-	        ! Extract azimuth angle for most down-wind blade orientation
-	        theta = -EulerExtract( transpose(orientation) )
-	        m%BEMT_u(indx)%psiSkewOffset = theta(1)+PiBy2  ! cross-product of wind vector and rotor axis will lead downwind blade azimuth by 90 degrees
-	     end if
-         
+      ! Find the most-downwind azimuth angle needed by the skewed wake correction model
+      windCrossDisk = cross_product( x_hat_wind, x_hat_disk )
+      windCrossDiskMag = TwoNorm( windCrossDisk )
+      if (windCrossDiskMag <= 0.01_ReKi) then
+         m%BEMT_u(indx)%psiSkewOffset = PiBy2
+      else
+         ! Assemble blade azimuth unit vectors and orientation matrix
+         z_vec = windCrossDisk / windCrossDiskMag
+         x_vec = x_hat_disk
+         y_vec = cross_product( z_vec, x_vec )
+         orientation(1,:) = x_vec
+         orientation(2,:) = y_vec
+         orientation(3,:) = z_vec
+         ! Extract azimuth angle for most down-wind blade orientation
+         theta = -EulerExtract( transpose(orientation) )
+         m%BEMT_u(indx)%psiSkewOffset = theta(1)+PiBy2  ! cross-product of wind vector and rotor axis will lead downwind blade azimuth by 90 degrees
+      end if
+
 
    else
       call WrScr('AeroProjMod not supported - should never happen')
@@ -4014,7 +4014,7 @@ SUBROUTINE Init_BEMTmodule( InputFileData, RotInputFileData, u_AD, u, p, p_AD, x
       endif
    endif
    p%AeroBEM_Mod = InitInp%BEM_Mod ! Very important, for consistency
-   print*,'>>> AeroDyn: ProjMod, BEM_Mod', p%AeroProjMod, InitInp%BEM_Mod
+   print*,'>>> AeroDyn: ProjMod, BEM_Mod:', p%AeroProjMod, InitInp%BEM_Mod
       ! remove the ".AD" from the RootName
    k = len_trim(InitInp%RootName)
    if (k>3) then
