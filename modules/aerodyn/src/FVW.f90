@@ -458,6 +458,8 @@ subroutine FVW_SetParametersFromInputs( InitInp, p, ErrStat, ErrMsg )
    p%nWings       = size(InitInp%WingsMesh)
    p%DTaero       = InitInp%DTaero          ! AeroDyn Time step
    p%KinVisc      = InitInp%KinVisc         ! Kinematic air viscosity
+   p%MHK          = InitInp%MHK             ! MHK flag
+   p%WtrDpth      = InitInp%WtrDpth         ! Water depth
    call FVW_SetRootName(InitInp%RootName, p)
 
    ! Set indexing to AFI tables -- this is set from the AD15 calling code.
@@ -675,7 +677,7 @@ subroutine FVW_UpdateStates( t, n, u, utimes, p, x, xd, z, OtherState, AFInfo, m
       m%ComputeWakeInduced = .FALSE.
    endif
    if (bReevaluation) then
-      print*,'[INFO] FVW: Update States: reevaluation at the same starting time'
+      call WrScr('[INFO] FVW: Update States: reevaluation at the same starting time')
       call RollBackPreviousTimeStep() ! Cancel wake emission done in previous call
       m%ComputeWakeInduced = .TRUE.
    endif

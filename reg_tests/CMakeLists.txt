@@ -68,13 +68,8 @@ set(CTEST_SUBDYN_EXECUTABLE "${CMAKE_BINARY_DIR}/modules/subdyn/subdyn_driver${C
 # Set the InflowWind executable configuration option and default
 set(CTEST_INFLOWWIND_EXECUTABLE "${CMAKE_BINARY_DIR}/modules/inflowwind/inflowwind_driver${CMAKE_EXECUTABLE_SUFFIX}" CACHE FILEPATH "Specify the InflowWind driver executable to use in testing.")
 
-# Set the python executable configuration option and default
-if(NOT EXISTS ${PYTHON_EXECUTABLE})
-  find_program(PYTHON_EXECUTABLE NAMES python3 python py)
-  if(NOT EXISTS ${PYTHON_EXECUTABLE})
-    message(FATAL_ERROR "CMake cannot find a Python interpreter in your path. Python is required to run OpenFAST tests." )
-  endif()
-endif()
+# Set the MoorDyn executable configuration option and default
+set(CTEST_MOORDYN_EXECUTABLE "${CMAKE_BINARY_DIR}/modules/moordyn/moordyn_driver${CMAKE_EXECUTABLE_SUFFIX}" CACHE FILEPATH "Specify the MoorDyn driver executable to use in testing.")
 
 # Set the testing tolerance
 set(CTEST_RTEST_RTOL "2" CACHE STRING "Sets the relative orders of magnitude to allow to deviate from the baseline.")
@@ -85,7 +80,7 @@ add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/r-test")
 
 # build and seed the test directories with the data they need to run the tests
 file(MAKE_DIRECTORY ${CTEST_BINARY_DIR})
-foreach(regTest glue-codes/openfast glue-codes/openfast-cpp modules/aerodyn modules/beamdyn modules/hydrodyn modules/subdyn)
+foreach(regTest glue-codes/openfast glue-codes/openfast-cpp modules/aerodyn modules/beamdyn modules/hydrodyn modules/inflowwind modules/moordyn modules/subdyn)
   file(MAKE_DIRECTORY ${CTEST_BINARY_DIR}/${regTest})
 endforeach()
 
@@ -178,18 +173,19 @@ add_custom_target(
 )
 
 add_custom_target(
-  regression_tests
+  regression_tests ALL
   DEPENDS
     openfast
     regression_test_controllers
 )
 
 add_custom_target(
-  regression_test_module_drivers
+  regression_test_module_drivers ALL
   DEPENDS
     aerodyn_driver
     beamdyn_driver
     hydrodyn_driver
     inflowwind_driver
+    moordyn_driver
     subdyn_driver
 )

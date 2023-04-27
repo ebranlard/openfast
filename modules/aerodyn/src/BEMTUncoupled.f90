@@ -51,6 +51,7 @@ module BEMTUnCoupled
    public :: ApplySkewedWakeCorrection
    public :: Transform_ClCd_to_CxCy
    public :: getAirfoilOrientation
+   public :: getAirfoilOrientationMatrix
    public :: computeAirfoilOperatingAOA
    public :: Transform_ClCdCm_to_CxCyCzCmxCmyCmz
    public :: getHubTipLossCorrection
@@ -166,6 +167,24 @@ contains
       afRadialVec = rotMat(3,:)
       
    end subroutine getAirfoilOrientation
+!..................................................................................................................................
+!> getAirfoilOrientation = R_ap = transformation from from polar coordinate system of the section to the airfoil coordinate system
+   subroutine getAirfoilOrientationMatrix( theta, cantAngle, toeAngle, rotMat)
+      ! Routine for creating the airfoil orientation vectors
+      
+      implicit none
+      
+      real(ReKi), intent(in   ) :: theta
+      real(ReKi), intent(in   ) :: cantAngle
+      real(ReKi), intent(in   ) :: toeAngle
+      real(ReKi), intent(out  ) :: rotMat(3,3)
+      real(ReKi)                :: orientation(3)
+      
+      orientation(1) = toeAngle
+      orientation(2) = cantAngle
+      orientation(3) = -theta
+      rotMat = EulerConstruct( orientation ) ! = R_ap: from polar to airfoil
+   end subroutine getAirfoilOrientationMatrix
 !..................................................................................................................................
    subroutine computeAirfoilOperatingAOA( BEM_Mod, phi, theta, cantAngle, toeAngle, AoA )
       ! Routine for computing local angle-of-attack in the airfoil reference frame
@@ -612,7 +631,7 @@ subroutine inductionFactors0(B, r, chord, phi, cn, ct, Vx, Vy, F, wakerotation, 
    if (wakerotation) then 
       VxCorrected = Vx
       call getTangentialInduction(a, cphi, sphi, Vx, F, 1.0_R8Ki, sigma_p, ct, VxCorrected, 0.0_R8Ki, 1.0_R8Ki, .False., ap, kp)
-     
+            
    else 
       
       ! we're not computing tangential induction:       
@@ -698,7 +717,7 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
    implicit none
 
    ! in
-   integer(IntKi), intent(in   ) :: BEM_Mod
+   integer,    intent(in) :: BEM_Mod
    integer,    intent(in) :: B              !< number of blades [p%numBlades]
    real(ReKi), intent(in) :: r              !< local radial position [u%rlocal]
    real(ReKi), intent(in) :: chord          !< chord [p%chord]
@@ -811,7 +830,7 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
    ! compute tangential induction factor:
    !.....................................................
    if (wakerotation) then 
-      call getTangentialInduction(a, cphi, sphi, Vx, F, kCorrectionFactor, sigma_p, ct, VxCorrected2, effectiveYaw, H, MomentumCorr, ap, kp)
+      call getTangentialInduction(a, cphi, sphi, Vx, F, kCorrectionFactor, sigma_p, ct, VxCorrected, effectiveYaw, H, MomentumCorr, ap, kp)
    else 
       
       ! we're not computing tangential induction:       

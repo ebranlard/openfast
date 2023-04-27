@@ -1543,7 +1543,7 @@ subroutine ApplySkewedWakeCorrection_AllNodes(p, u, m, x, phi, OtherState, axInd
    !............................................
    ! Apply skewed wake correction to the axial induction (y%axInduction)
    !............................................
-   if (p%skewWakeMod == SkewMod_PittPeters) then
+   if ( p%skewWakeMod == SkewMod_PittPeters ) then
       if (p%BEM_Mod==BEMMod_2D) then
          ! do nothing
       else
@@ -1589,7 +1589,7 @@ function CalculateChiAngle(p, u, m, x, OtherState, UseV0) result(chi)
    else
       chi = acos( min(1.0_R8Ki, max(-1.0_R8Ki, dot_product(u%x_hat_disk, v_w) / denom)) )
    end if
-   
+
 end function CalculateChiAngle
 !----------------------------------------------------------------------------------------------------------------------------------
 subroutine BEMT_CalcContStateDeriv( t, u, p, x, xd, z, OtherState, m, dxdt, AFInfo, ErrStat, ErrMsg )
