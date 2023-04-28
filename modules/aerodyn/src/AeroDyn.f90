@@ -322,19 +322,19 @@ subroutine AD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
       if (Failed()) return;
 
    ! Temporary HACK, for WakeMod=10, 11 or 12 use AeroProjMod 2 (will trigger PolarBEM)
-   if (InputFileData%WakeMod==10) then
-      call WrScr('   WARNING: WakeMod=10 is a temporary hack. Using new projection method with WakeMod=0.')
-      InputFileData%WakeMod = 0
-      AeroProjMod(:) = 2
-   elseif (InputFileData%WakeMod==11) then
-      call WrScr('   WARNING: WakeMod=11 is a temporary hack. Using new projection method with WakeMod=1.')
-      InputFileData%WakeMod = 1
-      AeroProjMod(:) = 2
-   elseif (InputFileData%WakeMod==12) then
-      call WrScr('   WARNING: WakeMod=12 is a temporary hack. Using new projection method with WakeMod=2.')
-      InputFileData%WakeMod = 2
-      AeroProjMod(:) = 2
-   endif
+   !if (InputFileData%WakeMod==10) then
+   !   call WrScr('   WARNING: WakeMod=10 is a temporary hack. Using new projection method with WakeMod=0.')
+   !   InputFileData%WakeMod = 0
+   !   AeroProjMod(:) = 2
+   !elseif (InputFileData%WakeMod==11) then
+   !   call WrScr('   WARNING: WakeMod=11 is a temporary hack. Using new projection method with WakeMod=1.')
+   !   InputFileData%WakeMod = 1
+   !   AeroProjMod(:) = 2
+   !elseif (InputFileData%WakeMod==12) then
+   !   call WrScr('   WARNING: WakeMod=12 is a temporary hack. Using new projection method with WakeMod=2.')
+   !   InputFileData%WakeMod = 2
+   !   AeroProjMod(:) = 2
+   !endif
 
       ! -----------------------------------------------------------------
       ! Read the AeroDyn blade files, or copy from passed input
@@ -358,10 +358,10 @@ subroutine AD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
       ! set the rest of the parameters
    p%SkewMod = InputFileData%SkewMod
    do iR = 1, nRotors
-      !p%rotors(iR)%AeroProjMod = InitInp%rotors(iR)%AeroProjMod
-      p%rotors(iR)%AeroProjMod = AeroProjMod(iR)
+      p%rotors(iR)%AeroProjMod = InitInp%rotors(iR)%AeroProjMod
+      !p%rotors(iR)%AeroProjMod = AeroProjMod(iR)
       p%rotors(iR)%AeroBEM_Mod = InitInp%rotors(iR)%AeroBEM_Mod
-      print*,'>>> AeroDyn: ProjMod, BEM_Mod:',p%rotors(iR)%AeroProjMod, p%rotors(iR)%AeroBEM_Mod
+      call WrScr('   AeroDyn: projMod: '//trim(num2lstr(p%rotors(iR)%AeroProjMod))//', BEM_Mod:'//trim(num2lstr(p%rotors(iR)%AeroBEM_Mod)))
       call SetParameters( InitInp, InputFileData, InputFileData%rotors(iR), p%rotors(iR), p, ErrStat2, ErrMsg2 )
       if (Failed()) return;
    enddo
@@ -3249,10 +3249,10 @@ subroutine SetOutputsFromBEMT( p, u, m, y )
             y%BladeLoad(k)%Moment(:,j) = matmul( moment, m%orientationAnnulus(:,:,j,k) )  ! moment per unit length of the jth node in the kth blade
          
          else
-	        ! Transfer loads from the airfoil frame to the blade frame
-	        y%BladeLoad(k)%Force(:,j)  = matmul( forceAirfoil,  u%BladeMotion(k)%Orientation(:,:,j) )  ! force per unit length of the jth node in the kth blade 
-	        y%BladeLoad(k)%Moment(:,j) = matmul( momentAirfoil, u%BladeMotion(k)%Orientation(:,:,j) )  ! moment per unit length of the jth node in the kth blade 
-	     endif
+            ! Transfer loads from the airfoil frame to the blade frame
+            y%BladeLoad(k)%Force(:,j)  = matmul( forceAirfoil,  u%BladeMotion(k)%Orientation(:,:,j) )  ! force per unit length of the jth node in the kth blade 
+            y%BladeLoad(k)%Moment(:,j) = matmul( momentAirfoil, u%BladeMotion(k)%Orientation(:,:,j) )  ! moment per unit length of the jth node in the kth blade 
+         endif
       end do !j=nodes
    end do !k=blades
    
@@ -4072,7 +4072,7 @@ SUBROUTINE Init_BEMTmodule( InputFileData, RotInputFileData, u_AD, u, p, p_AD, x
       endif
    endif
    p%AeroBEM_Mod = InitInp%BEM_Mod ! Very important, for consistency
-   !call WrScr('   AeroDyn: projMod: '//trim(num2lstr(p%AeroProjMod))//', BEM_Mod:'//trim(num2lstr(InitInp%BEM_Mod)))
+   call WrScr('   AeroDyn: projMod: '//trim(num2lstr(p%AeroProjMod))//', BEM_Mod:'//trim(num2lstr(InitInp%BEM_Mod)))
       ! remove the ".AD" from the RootName
    k = len_trim(InitInp%RootName)
    if (k>3) then
