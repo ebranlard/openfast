@@ -45,6 +45,7 @@ IMPLICIT NONE
     INTEGER(IntKi), PUBLIC, PARAMETER  :: BEMMod_3D_NoVxCorr = 201      ! Same as 2, no Vx Corr [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: BEMMod_3D_NoPhiProj = 202      ! Same as 2, no PhiProj [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: BEMMod_3D_Manu = 300      ! Emmanuels implementation [-]
+    INTEGER(IntKi), PUBLIC, PARAMETER  :: BEMMod_3D_Iterative = 200      ! 3D BEM - Iterative method [-]
 ! =========  BEMT_InitInputType  =======
   TYPE, PUBLIC :: BEMT_InitInputType
     REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: chord      !< Chord length at node [m]
@@ -110,6 +111,8 @@ IMPLICIT NONE
 ! =========  BEMT_ConstraintStateType  =======
   TYPE, PUBLIC :: BEMT_ConstraintStateType
     REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: phi      !< angle between the plane of rotation and the direction of the local wind [rad]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: axInduction      !< axial induction factor [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: tanInduction      !< tangentail induction factor [-]
   END TYPE BEMT_ConstraintStateType
 ! =======================
 ! =========  BEMT_OtherStateType  =======
@@ -1998,6 +2001,34 @@ IF (ALLOCATED(SrcConstrStateData%phi)) THEN
   END IF
     DstConstrStateData%phi = SrcConstrStateData%phi
 ENDIF
+IF (ALLOCATED(SrcConstrStateData%axInduction)) THEN
+  i1_l = LBOUND(SrcConstrStateData%axInduction,1)
+  i1_u = UBOUND(SrcConstrStateData%axInduction,1)
+  i2_l = LBOUND(SrcConstrStateData%axInduction,2)
+  i2_u = UBOUND(SrcConstrStateData%axInduction,2)
+  IF (.NOT. ALLOCATED(DstConstrStateData%axInduction)) THEN 
+    ALLOCATE(DstConstrStateData%axInduction(i1_l:i1_u,i2_l:i2_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+      CALL SetErrStat(ErrID_Fatal, 'Error allocating DstConstrStateData%axInduction.', ErrStat, ErrMsg,RoutineName)
+      RETURN
+    END IF
+  END IF
+    DstConstrStateData%axInduction = SrcConstrStateData%axInduction
+ENDIF
+IF (ALLOCATED(SrcConstrStateData%tanInduction)) THEN
+  i1_l = LBOUND(SrcConstrStateData%tanInduction,1)
+  i1_u = UBOUND(SrcConstrStateData%tanInduction,1)
+  i2_l = LBOUND(SrcConstrStateData%tanInduction,2)
+  i2_u = UBOUND(SrcConstrStateData%tanInduction,2)
+  IF (.NOT. ALLOCATED(DstConstrStateData%tanInduction)) THEN 
+    ALLOCATE(DstConstrStateData%tanInduction(i1_l:i1_u,i2_l:i2_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+      CALL SetErrStat(ErrID_Fatal, 'Error allocating DstConstrStateData%tanInduction.', ErrStat, ErrMsg,RoutineName)
+      RETURN
+    END IF
+  END IF
+    DstConstrStateData%tanInduction = SrcConstrStateData%tanInduction
+ENDIF
  END SUBROUTINE BEMT_CopyConstrState
 
  SUBROUTINE BEMT_DestroyConstrState( ConstrStateData, ErrStat, ErrMsg, DEALLOCATEpointers )
@@ -2023,6 +2054,12 @@ ENDIF
   
 IF (ALLOCATED(ConstrStateData%phi)) THEN
   DEALLOCATE(ConstrStateData%phi)
+ENDIF
+IF (ALLOCATED(ConstrStateData%axInduction)) THEN
+  DEALLOCATE(ConstrStateData%axInduction)
+ENDIF
+IF (ALLOCATED(ConstrStateData%tanInduction)) THEN
+  DEALLOCATE(ConstrStateData%tanInduction)
 ENDIF
  END SUBROUTINE BEMT_DestroyConstrState
 
@@ -2065,6 +2102,16 @@ ENDIF
   IF ( ALLOCATED(InData%phi) ) THEN
     Int_BufSz   = Int_BufSz   + 2*2  ! phi upper/lower bounds for each dimension
       Re_BufSz   = Re_BufSz   + SIZE(InData%phi)  ! phi
+  END IF
+  Int_BufSz   = Int_BufSz   + 1     ! axInduction allocated yes/no
+  IF ( ALLOCATED(InData%axInduction) ) THEN
+    Int_BufSz   = Int_BufSz   + 2*2  ! axInduction upper/lower bounds for each dimension
+      Re_BufSz   = Re_BufSz   + SIZE(InData%axInduction)  ! axInduction
+  END IF
+  Int_BufSz   = Int_BufSz   + 1     ! tanInduction allocated yes/no
+  IF ( ALLOCATED(InData%tanInduction) ) THEN
+    Int_BufSz   = Int_BufSz   + 2*2  ! tanInduction upper/lower bounds for each dimension
+      Re_BufSz   = Re_BufSz   + SIZE(InData%tanInduction)  ! tanInduction
   END IF
   IF ( Re_BufSz  .GT. 0 ) THEN 
      ALLOCATE( ReKiBuf(  Re_BufSz  ), STAT=ErrStat2 )
@@ -2109,6 +2156,46 @@ ENDIF
       DO i2 = LBOUND(InData%phi,2), UBOUND(InData%phi,2)
         DO i1 = LBOUND(InData%phi,1), UBOUND(InData%phi,1)
           ReKiBuf(Re_Xferred) = InData%phi(i1,i2)
+          Re_Xferred = Re_Xferred + 1
+        END DO
+      END DO
+  END IF
+  IF ( .NOT. ALLOCATED(InData%axInduction) ) THEN
+    IntKiBuf( Int_Xferred ) = 0
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    IntKiBuf( Int_Xferred ) = 1
+    Int_Xferred = Int_Xferred + 1
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%axInduction,1)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%axInduction,1)
+    Int_Xferred = Int_Xferred + 2
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%axInduction,2)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%axInduction,2)
+    Int_Xferred = Int_Xferred + 2
+
+      DO i2 = LBOUND(InData%axInduction,2), UBOUND(InData%axInduction,2)
+        DO i1 = LBOUND(InData%axInduction,1), UBOUND(InData%axInduction,1)
+          ReKiBuf(Re_Xferred) = InData%axInduction(i1,i2)
+          Re_Xferred = Re_Xferred + 1
+        END DO
+      END DO
+  END IF
+  IF ( .NOT. ALLOCATED(InData%tanInduction) ) THEN
+    IntKiBuf( Int_Xferred ) = 0
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    IntKiBuf( Int_Xferred ) = 1
+    Int_Xferred = Int_Xferred + 1
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%tanInduction,1)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%tanInduction,1)
+    Int_Xferred = Int_Xferred + 2
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%tanInduction,2)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%tanInduction,2)
+    Int_Xferred = Int_Xferred + 2
+
+      DO i2 = LBOUND(InData%tanInduction,2), UBOUND(InData%tanInduction,2)
+        DO i1 = LBOUND(InData%tanInduction,1), UBOUND(InData%tanInduction,1)
+          ReKiBuf(Re_Xferred) = InData%tanInduction(i1,i2)
           Re_Xferred = Re_Xferred + 1
         END DO
       END DO
@@ -2162,6 +2249,52 @@ ENDIF
       DO i2 = LBOUND(OutData%phi,2), UBOUND(OutData%phi,2)
         DO i1 = LBOUND(OutData%phi,1), UBOUND(OutData%phi,1)
           OutData%phi(i1,i2) = ReKiBuf(Re_Xferred)
+          Re_Xferred = Re_Xferred + 1
+        END DO
+      END DO
+  END IF
+  IF ( IntKiBuf( Int_Xferred ) == 0 ) THEN  ! axInduction not allocated
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    Int_Xferred = Int_Xferred + 1
+    i1_l = IntKiBuf( Int_Xferred    )
+    i1_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    i2_l = IntKiBuf( Int_Xferred    )
+    i2_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    IF (ALLOCATED(OutData%axInduction)) DEALLOCATE(OutData%axInduction)
+    ALLOCATE(OutData%axInduction(i1_l:i1_u,i2_l:i2_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+       CALL SetErrStat(ErrID_Fatal, 'Error allocating OutData%axInduction.', ErrStat, ErrMsg,RoutineName)
+       RETURN
+    END IF
+      DO i2 = LBOUND(OutData%axInduction,2), UBOUND(OutData%axInduction,2)
+        DO i1 = LBOUND(OutData%axInduction,1), UBOUND(OutData%axInduction,1)
+          OutData%axInduction(i1,i2) = ReKiBuf(Re_Xferred)
+          Re_Xferred = Re_Xferred + 1
+        END DO
+      END DO
+  END IF
+  IF ( IntKiBuf( Int_Xferred ) == 0 ) THEN  ! tanInduction not allocated
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    Int_Xferred = Int_Xferred + 1
+    i1_l = IntKiBuf( Int_Xferred    )
+    i1_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    i2_l = IntKiBuf( Int_Xferred    )
+    i2_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    IF (ALLOCATED(OutData%tanInduction)) DEALLOCATE(OutData%tanInduction)
+    ALLOCATE(OutData%tanInduction(i1_l:i1_u,i2_l:i2_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+       CALL SetErrStat(ErrID_Fatal, 'Error allocating OutData%tanInduction.', ErrStat, ErrMsg,RoutineName)
+       RETURN
+    END IF
+      DO i2 = LBOUND(OutData%tanInduction,2), UBOUND(OutData%tanInduction,2)
+        DO i1 = LBOUND(OutData%tanInduction,1), UBOUND(OutData%tanInduction,1)
+          OutData%tanInduction(i1,i2) = ReKiBuf(Re_Xferred)
           Re_Xferred = Re_Xferred + 1
         END DO
       END DO

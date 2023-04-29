@@ -89,6 +89,21 @@ real(ReKi) function ComputePhiWithInduction( Vx, Vy, a, aprime, cantAngle, xVelC
    
    
 end function ComputePhiWithInduction
+
+subroutine ComputePhiFromInductions(u, p, phi, axInduction, tanInduction)
+   type(BEMT_InputType),         intent(in   ) :: u
+   type(BEMT_ParameterType),     intent(in   ) :: p
+   real(ReKi),                   intent(inout) :: phi(:,:)
+   real(ReKi),                   intent(in   ) :: axInduction(:,:)
+   real(ReKi),                   intent(in   ) :: tanInduction(:,:)
+   integer(IntKi)                              :: i, j
+   do j = 1,p%numBlades ! Loop through all blades
+      do i = 1,p%numBladeNodes ! Loop through the blade nodes / elements
+         phi(i,j) = ComputePhiWithInduction( u%Vx(i,j), u%Vy(i,j),  axInduction(i,j), tanInduction(i,j), u%cantAngle(i,j), u%xVelCorr(i,j) )
+      enddo             ! I - Blade nodes / elements
+   enddo          ! J - All blades
+end subroutine ComputePhiFromInductions
+
  
 !----------------------------------------------------------------------------------------------------------------------------------   
 subroutine BEMT_Set_UA_InitData( InitInp, interval, Init_UA_Data, errStat, errMsg )
@@ -176,7 +191,7 @@ subroutine BEMT_SetParameters( InitInp, p, errStat, errMsg )
    p%BEM_Mod        = InitInp%BEM_Mod
    !call WrScr('>>>> BEM_Mod '//trim(num2lstr(p%BEM_Mod)))
    !if ((p%BEM_Mod/=BEMMod_2D .and. p%BEM_Mod/=BEMMod_3D )) then
-   if (.not.(ANY( p%BEM_Mod == (/BEMMod_2D, BEMMod_3D, BEMMod_3D_NoVxCorr, BEMMod_3D_NoPhiProj, BEMMod_3D_Manu/)))) then
+   if (.not.(ANY( p%BEM_Mod == (/BEMMod_2D, BEMMod_3D, BEMMod_3D_NoVxCorr, BEMMod_3D_NoPhiProj, BEMMod_3D_Manu, BEMMod_3D_Iterative/)))) then
       call SetErrStat( ErrID_Fatal, 'BEM_Mod needs to be 0 or 2 for now', errStat, errMsg, RoutineName )
       return
    endif
@@ -284,6 +299,20 @@ subroutine BEMT_InitContraintStates( z, p, errStat, errMsg )
       call SetErrStat( ErrID_Fatal, 'Error allocating memory for z%phi.', errStat, errMsg, RoutineName )
       return
    end if 
+   if (p%BEM_Mod == BEMMod_3D_Iterative) then
+      allocate ( z%axInduction( p%numBladeNodes, p%numBlades ), STAT = errStat2 )
+      if ( errStat2 /= 0 ) then
+         call SetErrStat( ErrID_Fatal, 'Error allocating memory for z%axInduction.', errStat, errMsg, RoutineName )
+         return
+      end if 
+      allocate ( z%tanInduction( p%numBladeNodes, p%numBlades ), STAT = errStat2 )
+      if ( errStat2 /= 0 ) then
+         call SetErrStat( ErrID_Fatal, 'Error allocating memory for z%tanInduction.', errStat, errMsg, RoutineName )
+         return
+      end if 
+      z%axInduction = -99999._ReKi
+      z%tanInduction = -99999._ReKi
+   endif
   
 end subroutine BEMT_InitContraintStates
 
@@ -822,6 +851,10 @@ subroutine BEMT_UpdateStates( t, n, u, utimes, p, x, xd, z, OtherState, AFInfo, 
    
    ErrStat = ErrID_None
    ErrMsg = ""
+   if (p%BEM_Mod == BEMMod_3D_Iterative) then
+      call BEMT_UpdateStates_iterative(t, n, u, utimes, p, x, xd, z, OtherState, AFInfo, m, errStat, errMsg )
+      return
+   endif
    
    !...............................................................................................................................
    ! if we haven't initialized z%phi, we want to get a better guess as to what the actual values of phi at t are:
@@ -859,6 +892,10 @@ subroutine BEMT_UpdateStates( t, n, u, utimes, p, x, xd, z, OtherState, AFInfo, 
    !...............................................................................................................................
    !  compute inputs to DBEMT at step n+1 (also setting inductions--WITHOUT DBEMT or skewed wake corrections--at step n+1)
    !...............................................................................................................................
+   if (p%BEM_Mod == BEMMod_3D_Iterative) then
+      m%axInduction  = z%axInduction
+      m%tanInduction = z%tanInduction
+   endif
    call BEMT_CalcOutput_Inductions( TimeIndex_t_plus_dt, t, .true., .false., z%phi, u(TimeIndex_t_plus_dt), p, x, xd, z, OtherState, AFInfo, m%axInduction, m%tanInduction, m%chi, m, errStat2, errMsg2 )
       call SetErrStat(ErrStat2,ErrMsg2,ErrStat,ErrMsg,RoutineName)
       if (ErrStat >= AbortErrLev) return
@@ -931,6 +968,60 @@ subroutine BEMT_UpdateStates( t, n, u, utimes, p, x, xd, z, OtherState, AFInfo, 
    OtherState%nodesInitialized = .true.         ! otherState updated to t+dt (i.e., n+1)
    
 end subroutine BEMT_UpdateStates
+!..................................................................................................................................
+subroutine BEMT_UpdateStates_iterative( t, n, u, utimes, p, x, xd, z, OtherState, AFInfo, m, errStat, errMsg )
+! Loose coupling routine for solving for constraint states, integrating continuous states, and updating discrete states
+! Continuous, constraint, discrete, and other states are updated for t + Interval
+!
+! NOTE:  This is a non-standard framework interface!!!!!  GJH
+!..................................................................................................................................
+
+   real(DbKi),                          intent(in   ) :: t          ! Current simulation time in seconds
+   integer(IntKi),                      intent(in   ) :: n          ! Current simulation time step n = 0,1,...
+   type(BEMT_InputType),                intent(in   ) :: u(2)       ! Input at t and t+ dt 
+   real(DbKi),                          intent(in   ) :: uTimes(2)  ! Times associated with u(:), in seconds
+   type(BEMT_ParameterType),            intent(in   ) :: p          ! Parameters   
+   type(BEMT_ContinuousStateType),      intent(inout) :: x          ! Input: Continuous states at t;
+                                                                    !   Output: Continuous states at t + Interval
+   type(BEMT_DiscreteStateType),        intent(inout) :: xd         ! Input: Discrete states at t;
+                                                                    !   Output: Discrete states at t  + Interval
+   type(BEMT_ConstraintStateType),      intent(inout) :: z          ! Input: Constraint states at t;
+                                                                    !   Output: Constraint states at t + Interval
+   type(BEMT_OtherStateType),           intent(inout) :: OtherState ! Input: Other states at t;
+                                                                    !   Output: Other states at t + Interval
+   type(BEMT_MiscVarType),              intent(inout) :: m          ! Misc/optimization variables
+   type(AFI_ParameterType),             intent(in   ) :: AFInfo(:)  ! The airfoil parameter data
+   integer(IntKi),                      intent(  out) :: errStat    ! Error status of the operation
+   character(*),                        intent(  out) :: errMsg     ! Error message if ErrStat /= ErrID_None
+   integer(IntKi)                                    :: i,j
+   integer(IntKi), parameter                         :: TimeIndex_t = 1
+   integer(IntKi), parameter                         :: TimeIndex_t_plus_dt = 2
+   
+   character(ErrMsgLen)                              :: errMsg2     ! temporary Error message if ErrStat /= ErrID_None
+   integer(IntKi)                                    :: errStat2    ! temporary Error status of the operation
+   character(*), parameter                           :: RoutineName = 'BEMT_UpdateStates'
+   
+   
+   ErrStat = ErrID_None
+   ErrMsg = ""
+   !...............................................................................................................................
+   ! if we haven't initialized z%phi, we want to get a better guess as to what the actual values of phi at t are:
+   !...............................................................................................................................
+   if (.not. OtherState%nodesInitialized) then
+         z%axInduction = 0.0_ReKi
+         z%tanInduction = 0.0_ReKi
+   end if
+   !...............................................................................................................................
+   !  update BEMT constraint states to step n+1
+   !...............................................................................................................................
+   call BEMT_CalcOutput_Inductions_iterative( t, u(TimeIndex_t_plus_dt), p, x, xd, OtherState, AFInfo, z%axInduction, z%tanInduction,  m, errStat2, errMsg2)
+
+   ! Compute phi just to be safe, but shouldn't be needed
+   call ComputePhiFromInductions(u(TimeIndex_t_plus_dt), p, z%phi, z%axInduction, z%tanInduction) 
+   m%phi = z%phi
+
+   OtherState%nodesInitialized = .true.         ! otherState updated to t+dt (i.e., n+1)
+end subroutine BEMT_UpdateStates_iterative
 !..................................................................................................................................
 subroutine SetInputs_For_DBEMT(u_DBEMT, u, p, axInduction, tanInduction, Rtip)
    ! note that this subroutine inherits all data from BEMT_UpdateStates
@@ -1243,14 +1334,27 @@ subroutine BEMT_CalcOutput( t, u, p, x, xd, z, OtherState, AFInfo, y, m, errStat
    ! if we haven't initialized z%phi, we want to get a better guess as to what the actual values of phi are:
    !...............................................................................................................................
    if (.not. OtherState%nodesInitialized) then
-      call UpdatePhi( u, p, y%phi, AFInfo, m, m%ValidPhi, errStat2, errMsg2 )
+      if (p%BEM_Mod == BEMMod_3D_Iterative) then
+         y%axInduction = 0.0_ReKi
+         y%tanInduction = 0.0_ReKi
+         call BEMT_CalcOutput_Inductions_iterative( t, u, p, x, xd, OtherState, AFInfo, y%axInduction, y%tanInduction,  m, errStat2, errMsg2)
+      else
+         call UpdatePhi( u, p, y%phi, AFInfo, m, m%ValidPhi, errStat2, errMsg2 )
+      endif
+   else
+      if (p%BEM_Mod == BEMMod_3D_Iterative) then
+         y%axInduction  = z%axInduction
+         y%tanInduction = z%tanInduction
+      endif
    end if
    
    !............................................
    ! calculate inductions using BEMT, applying the DBEMT, and/or skewed wake corrections as applicable:
    ! NOTE that we don't use the DBEMT inputs when calling its CalcOutput routine, so we'll skip calculating them here
    !............................................
-   call BEMT_CalcOutput_Inductions( InputIndex, t, .false., .true., y%phi, u, p, x, xd, z, OtherState, AFInfo, y%axInduction, y%tanInduction, y%chi, m, errStat, errMsg )
+   if (p%BEM_Mod /= BEMMod_3D_Iterative) then
+      call BEMT_CalcOutput_Inductions( InputIndex, t, .false., .true., y%phi, u, p, x, xd, z, OtherState, AFInfo, y%axInduction, y%tanInduction, y%chi, m, errStat, errMsg )
+   endif
    
    !............................................
    ! update phi if necessary (consistent with inductions) and calculate inputs to UA (EVEN if UA isn't used, because we use the inputs later):
@@ -1495,6 +1599,55 @@ subroutine BEMT_CalcOutput_Inductions( InputIndex, t, CalculateDBEMTInputs, Appl
 
    return
 end subroutine BEMT_CalcOutput_Inductions
+!..................................................................................................................................
+!> Compute axial and tangential inductions based, the input are overriden
+subroutine BEMT_CalcOutput_Inductions_iterative( t, u, p, x, xd, OtherState, AFInfo, axInduction, tanInduction,  m, errStat, errMsg )
+   REAL(DbKi),                     intent(in   )  :: t           ! current simulation time
+   type(BEMT_InputType),           intent(in   )  :: u           ! Inputs at Time t
+   type(BEMT_ParameterType),       intent(in   )  :: p           ! Parameters
+   type(BEMT_ContinuousStateType), intent(in   )  :: x           ! Continuous states at t
+   type(BEMT_DiscreteStateType),   intent(in   )  :: xd          ! Discrete states at t
+   type(BEMT_OtherStateType),      intent(in   )  :: OtherState  ! Other states at t
+   type(BEMT_MiscVarType),         intent(inout)  :: m           ! Misc/optimization variables
+   type(AFI_ParameterType),        intent(in   )  :: AFInfo(:)   ! The airfoil parameter data
+   REAL(ReKi),                     intent(inout)  :: axInduction(:,:)
+   REAL(ReKi),                     intent(inout)  :: tanInduction(:,:)
+   integer(IntKi),                 intent(  out)  :: errStat     ! Error status of the operation
+   character(*),                   intent(  out)  :: errMsg      ! Error message if ErrStat /= ErrID_None
+   ! Local variables:
+   integer(IntKi)                                 :: i                  !< blade node counter
+   integer(IntKi)                                 :: j                  !< blade counter
+   character(ErrMsgLen)                           :: errMsg2     ! temporary Error message if ErrStat /= ErrID_None
+   integer(IntKi)                                 :: errStat2    ! temporary Error status of the operation
+   character(*), parameter                        :: RoutineName = 'BEMT_CalcOutput_Inductions_iterative'
+   errStat = ErrID_None
+   errMsg = ""
+   
+         ! Initialize some output values
+   
+   if ( p%useInduction ) then
+      ! Locate the maximum rlocal value for this time step and this blade.  This is passed to the solve as Rtip.
+      call GetRTip( u, p, m%Rtip )
+      !............................................
+      ! get BEMT inductions (axInduction and tanInduction):
+      !............................................
+      do j = 1,p%numBlades ! Loop through all blades
+         do i = 1,p%numBladeNodes ! Loop through the blade nodes / elements
+            !if (OtherState%ValidPhi(i,j)) then
+               ! Need to get the induction factors for these conditions without skewed wake correction and without UA
+               ! COMPUTE: axInduction, tanInduction  
+            call BEMTU_InductionIterative(p, u, i, j, axInduction(i,j), tanInduction(i,j), AFInfo(p%AFIndx(i,j)), ErrStat2, ErrMsg2)
+         enddo
+      enddo
+
+   else ! no induction:
+      axInduction  = 0.0_ReKi ! all nodes
+      tanInduction = 0.0_ReKi ! all nodes
+   end if ! UseInduction
+
+   return
+end subroutine BEMT_CalcOutput_Inductions_iterative
+
 !----------------------------------------------------------------------------------------------------------------------------------
 subroutine calculate_Inductions_from_DBEMT_AllNodes(InputIndex, t, u, p, x, OtherState, m, axInduction, tanInduction)
    INTEGER(IntKi),                 intent(in   )  :: InputIndex  ! index into m%u_DEBMT (1 or 2)

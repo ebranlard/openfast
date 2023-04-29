@@ -273,7 +273,7 @@ CONTAINS
       m%AllOuts( RtSpeed ) = omega*RPS2RPM
       m%AllOuts( RtArea  ) = pi * rmax**2
       
-      tmp = matmul( u%HubMotion%Orientation(:,:,1), m%V_diskAvg )
+      tmp = matmul( u%HubMotion%Orientation(:,:,1), m%V_DiskAvg )
       m%AllOuts( RtVAvgxh ) = tmp(1)
       m%AllOuts( RtVAvgyh ) = tmp(2)
       m%AllOuts( RtVAvgzh ) = tmp(3)
