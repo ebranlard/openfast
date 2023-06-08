@@ -364,6 +364,8 @@ subroutine FVW_SetParametersFromInputs( InitInp, p, ErrStat, ErrMsg )
    p%nWings       = size(InitInp%WingsMesh)
    p%DTaero       = InitInp%DTaero          ! AeroDyn Time step
    p%KinVisc      = InitInp%KinVisc         ! Kinematic air viscosity
+   p%MHK          = InitInp%MHK             ! MHK flag
+   p%WtrDpth      = InitInp%WtrDpth         ! Water depth
    call FVW_SetRootName(InitInp%RootName, p)
 
    ! Set indexing to AFI tables -- this is set from the AD15 calling code.
@@ -1461,6 +1463,7 @@ subroutine FVW_CalcOutput(t, u, p, x, xd, z, OtherState, y, m, ErrStat, ErrMsg)
    call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
 
    ! Write some info to screen when major milestone achieved
+   if (p%DTfvw == p%DTaero) then
    if (m%iStep == p%nNWFree .and. p%nNWFree<p%nNWMax) then
       nP = CountCPs(p, p%nNWFree, 0)
       call WrScr(NewLine//'[INFO] OLAF free near wake is at full extent - '//trim(num2lstr(t))//'s, '//trim(num2lstr(nP))//' points.')
@@ -1476,6 +1479,7 @@ subroutine FVW_CalcOutput(t, u, p, x, xd, z, OtherState, y, m, ErrStat, ErrMsg)
    if (p%nFWMax>0 .and. m%iStep== p%nNWMax+p%nFWMax) then
       nP = CountCPs(p, p%nNWMax, p%nFWMax)
       call WrScr(NewLine//'[INFO] OLAF wake is at full extent - '//trim(num2lstr(t))//'s, '//trim(num2lstr(nP))//' points.')
+   endif
    endif
    
    ! Export to VTK

@@ -124,6 +124,8 @@ IMPLICIT NONE
     REAL(DbKi)  :: DTaero      !< Time interval for calls calculations [s]
     REAL(DbKi)  :: DTfvw      !< Time interval for calculating wake induced velocities [s]
     REAL(ReKi)  :: KinVisc      !< Kinematic air viscosity [m^2/s]
+    INTEGER(IntKi)  :: MHK      !< MHK flag [-]
+    REAL(ReKi)  :: WtrDpth      !< Water depth [m]
     INTEGER(IntKi)  :: WrVTK      !< Outputs VTK at each calcoutput call, even if main fst doesnt do it [-]
     INTEGER(IntKi)  :: VTKBlades      !< Outputs VTk for each blade 0=no blade, 1=Bld 1 [-]
     REAL(DbKi)  :: DTvtk      !< DT between vtk writes [s]
@@ -302,6 +304,8 @@ IMPLICIT NONE
     INTEGER(IntKi)  :: numBladeNodes      !< Number of nodes on each blade [-]
     REAL(DbKi)  :: DTaero      !< Time interval for calls (from AD15) [s]
     REAL(ReKi)  :: KinVisc      !< Kinematic air viscosity [m^2/s]
+    INTEGER(IntKi)  :: MHK      !< MHK flag [-]
+    REAL(ReKi)  :: WtrDpth      !< Water depth [m]
     INTEGER(IntKi)  :: UAMod      !< Model for the dynamic stall equations [1 = Leishman/Beddoes, 2 = Gonzalez, 3 = Minnema] [-]
     LOGICAL  :: UA_Flag      !< logical flag indicating whether to use UnsteadyAero [-]
     LOGICAL  :: Flookup      !< Use table lookup for f' and f''  [-]
@@ -2035,6 +2039,8 @@ ENDIF
     DstParamData%DTaero = SrcParamData%DTaero
     DstParamData%DTfvw = SrcParamData%DTfvw
     DstParamData%KinVisc = SrcParamData%KinVisc
+    DstParamData%MHK = SrcParamData%MHK
+    DstParamData%WtrDpth = SrcParamData%WtrDpth
     DstParamData%WrVTK = SrcParamData%WrVTK
     DstParamData%VTKBlades = SrcParamData%VTKBlades
     DstParamData%DTvtk = SrcParamData%DTvtk
@@ -2180,6 +2186,8 @@ ENDIF
       Db_BufSz   = Db_BufSz   + 1  ! DTaero
       Db_BufSz   = Db_BufSz   + 1  ! DTfvw
       Re_BufSz   = Re_BufSz   + 1  ! KinVisc
+      Int_BufSz  = Int_BufSz  + 1  ! MHK
+      Re_BufSz   = Re_BufSz   + 1  ! WtrDpth
       Int_BufSz  = Int_BufSz  + 1  ! WrVTK
       Int_BufSz  = Int_BufSz  + 1  ! VTKBlades
       Db_BufSz   = Db_BufSz   + 1  ! DTvtk
@@ -2350,6 +2358,10 @@ ENDIF
     DbKiBuf(Db_Xferred) = InData%DTfvw
     Db_Xferred = Db_Xferred + 1
     ReKiBuf(Re_Xferred) = InData%KinVisc
+    Re_Xferred = Re_Xferred + 1
+    IntKiBuf(Int_Xferred) = InData%MHK
+    Int_Xferred = Int_Xferred + 1
+    ReKiBuf(Re_Xferred) = InData%WtrDpth
     Re_Xferred = Re_Xferred + 1
     IntKiBuf(Int_Xferred) = InData%WrVTK
     Int_Xferred = Int_Xferred + 1
@@ -2569,6 +2581,10 @@ ENDIF
     OutData%DTfvw = DbKiBuf(Db_Xferred)
     Db_Xferred = Db_Xferred + 1
     OutData%KinVisc = ReKiBuf(Re_Xferred)
+    Re_Xferred = Re_Xferred + 1
+    OutData%MHK = IntKiBuf(Int_Xferred)
+    Int_Xferred = Int_Xferred + 1
+    OutData%WtrDpth = ReKiBuf(Re_Xferred)
     Re_Xferred = Re_Xferred + 1
     OutData%WrVTK = IntKiBuf(Int_Xferred)
     Int_Xferred = Int_Xferred + 1
@@ -10543,6 +10559,8 @@ ENDIF
     DstInitInputData%numBladeNodes = SrcInitInputData%numBladeNodes
     DstInitInputData%DTaero = SrcInitInputData%DTaero
     DstInitInputData%KinVisc = SrcInitInputData%KinVisc
+    DstInitInputData%MHK = SrcInitInputData%MHK
+    DstInitInputData%WtrDpth = SrcInitInputData%WtrDpth
     DstInitInputData%UAMod = SrcInitInputData%UAMod
     DstInitInputData%UA_Flag = SrcInitInputData%UA_Flag
     DstInitInputData%Flookup = SrcInitInputData%Flookup
@@ -10674,6 +10692,8 @@ ENDIF
       Int_BufSz  = Int_BufSz  + 1  ! numBladeNodes
       Db_BufSz   = Db_BufSz   + 1  ! DTaero
       Re_BufSz   = Re_BufSz   + 1  ! KinVisc
+      Int_BufSz  = Int_BufSz  + 1  ! MHK
+      Re_BufSz   = Re_BufSz   + 1  ! WtrDpth
       Int_BufSz  = Int_BufSz  + 1  ! UAMod
       Int_BufSz  = Int_BufSz  + 1  ! UA_Flag
       Int_BufSz  = Int_BufSz  + 1  ! Flookup
@@ -10801,6 +10821,10 @@ ENDIF
     DbKiBuf(Db_Xferred) = InData%DTaero
     Db_Xferred = Db_Xferred + 1
     ReKiBuf(Re_Xferred) = InData%KinVisc
+    Re_Xferred = Re_Xferred + 1
+    IntKiBuf(Int_Xferred) = InData%MHK
+    Int_Xferred = Int_Xferred + 1
+    ReKiBuf(Re_Xferred) = InData%WtrDpth
     Re_Xferred = Re_Xferred + 1
     IntKiBuf(Int_Xferred) = InData%UAMod
     Int_Xferred = Int_Xferred + 1
@@ -10966,6 +10990,10 @@ ENDIF
     OutData%DTaero = DbKiBuf(Db_Xferred)
     Db_Xferred = Db_Xferred + 1
     OutData%KinVisc = ReKiBuf(Re_Xferred)
+    Re_Xferred = Re_Xferred + 1
+    OutData%MHK = IntKiBuf(Int_Xferred)
+    Int_Xferred = Int_Xferred + 1
+    OutData%WtrDpth = ReKiBuf(Re_Xferred)
     Re_Xferred = Re_Xferred + 1
     OutData%UAMod = IntKiBuf(Int_Xferred)
     Int_Xferred = Int_Xferred + 1

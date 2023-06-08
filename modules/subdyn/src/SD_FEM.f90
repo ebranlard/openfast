@@ -949,6 +949,8 @@ SUBROUTINE SetElementProperties(Init, p, ErrStat, ErrMsg)
          Ixx   = (Init%PropSetsX(P1, 8) + Init%PropSetsX(P2, 8)) / 2
          Iyy   = (Init%PropSetsX(P1, 9) + Init%PropSetsX(P2, 9)) / 2
          Jzz   = (Init%PropSetsX(P1, 10) + Init%PropSetsX(P2, 10)) / 2
+         D1 = 2._ReKi*(A/PI)**0.5 !Approximation, this value should not be used
+         D2 = D1
 
          p%ElemProps(i)%Ixx    = Ixx
          p%ElemProps(i)%Iyy    = Iyy
@@ -970,7 +972,7 @@ SUBROUTINE SetElementProperties(Init, p, ErrStat, ErrMsg)
          p%ElemProps(i)%YoungE = Init%PropsC(P1, 2)/1    ! Young's modulus, E=EA/A  [N/m^2]
          p%ElemProps(i)%Rho    = Init%PropsC(P1, 3)      ! Material density [kg/m3]
          p%ElemProps(i)%T0     = Init%PropsC(P1, 4)      ! Pretension force [N]
-         p%ElemProps(i)%D      = min(sqrt(1/Pi)*4, L*0.05) ! For plotting only
+         p%ElemProps(i)%D      = min(sqrt(1/Pi)*4, L*0.05_ReKi) ! For plotting only
 
       else if (eType==idMemberRigid) then
          if (DEV_VERSION) then
@@ -978,7 +980,7 @@ SUBROUTINE SetElementProperties(Init, p, ErrStat, ErrMsg)
          endif
          p%ElemProps(i)%Area   = 1                  ! Arbitrary set to 1
          p%ElemProps(i)%Rho    = Init%PropsR(P1, 2)
-         p%ElemProps(i)%D      = min(sqrt(1/Pi)*4, L*0.05) ! For plotting only
+         p%ElemProps(i)%D      = min(sqrt(1/Pi)*4, L*0.05_ReKi) ! For plotting only
 
       else
          ! Should not happen
@@ -1788,9 +1790,12 @@ SUBROUTINE DirectElimination(Init, p, ErrStat, ErrMsg)
    ! --- DOF elimination for system matrices and RHS vector
    nDOF = p%nDOF_red
    if (p%reduced) then
-      ! Temporary backup of M and K of full system
-      call move_alloc(Init%M,  MM)
-      call move_alloc(Init%K,  KK)
+      ! Temporary backup of M and K of full system (Flang compiler failed when move_alloc was used here, so arrays are allocated, moved, and deallocated manually)
+      CALL AllocAry(KK, size(Init%K,1), size(Init%K,2), 'KK',  ErrStat2, ErrMsg2); if(Failed()) return; ! system stiffness matrix 
+      CALL AllocAry(MM, size(Init%M,1), size(Init%M,2), 'MM',  ErrStat2, ErrMsg2); if(Failed()) return; ! system mass matrix 
+      KK = Init%K
+      MM = Init%M
+      deallocate(Init%K, Init%M)
       !  Reallocating
       CALL AllocAry( Init%K,      nDOF, nDOF,       'Init%K'   ,  ErrStat2, ErrMsg2); if(Failed()) return; ! system stiffness matrix 
       CALL AllocAry( Init%M,      nDOF, nDOF,       'Init%M'   ,  ErrStat2, ErrMsg2); if(Failed()) return; ! system mass matrix 
