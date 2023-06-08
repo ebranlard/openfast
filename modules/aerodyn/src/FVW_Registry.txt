@@ -109,6 +109,7 @@ typedef     ^                   ^               Logical                         
 typedef     ^                   ^               Logical                          Induction     - .true.  -  "Compute induction" 
 typedef     ^                   ^               ReKi                             kFrozenNWStart - 0.75   -  "Fraction of wake induced velocity at start of frozen wake. 1 seems too strong." 
 typedef     ^                   ^               ReKi                             kFrozenNWEnd   - 0.5    -  "Fraction of wake induced velocity at end of frozen wake" 
+typedef     ^                   ^               Logical                          ConstantOverCycling - .false.  -  "Keep states and all induced velocities constant when overcycling" 
 
 #.......... ContinuousStateType ......
 typedef FVW/FVW            Wng_ContinuousStateType   ReKi                        Gamma_NW     ::  -  -  "Circulation of the near wake panels (    nSpan     x nNW  )" -

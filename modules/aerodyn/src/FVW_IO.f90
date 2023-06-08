@@ -122,6 +122,10 @@ SUBROUTINE FVW_ReadInputFile( FileName, p, m, Inp, ErrStat, ErrMsg )
          call Conv2UC(sDummy)  ! to uppercase
          if (index(sDummy, '!') == 1 .or. index(sDummy, '=') == 1 .or. index(sDummy, '#') == 1) then
             ! pass comment lines
+
+         elseif (index(sDummy, 'CONSTANTOVERCYCLING')>1) then
+            read(sDummy, '(L1)') p%ConstantOverCycling
+            print*,'   >>> ConstantOvercycling',p%ConstantOverCycling
          elseif (index(sDummy, 'INDUCTIONATCP')>1) then
             read(sDummy, '(L1)') p%InductionAtCP
             print*,'   >>> InductionAtCP      ',p%InductionAtCP

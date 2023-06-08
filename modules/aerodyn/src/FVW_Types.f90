@@ -138,6 +138,7 @@ IMPLICIT NONE
     LOGICAL  :: Induction = .true.      !< Compute induction [-]
     REAL(ReKi)  :: kFrozenNWStart = 0.75      !< Fraction of wake induced velocity at start of frozen wake. 1 seems too strong. [-]
     REAL(ReKi)  :: kFrozenNWEnd = 0.5      !< Fraction of wake induced velocity at end of frozen wake [-]
+    LOGICAL  :: ConstantOverCycling = .false.      !< Keep states and all induced velocities constant when overcycling [-]
   END TYPE FVW_ParameterType
 ! =======================
 ! =========  Wng_ContinuousStateType  =======
@@ -2048,6 +2049,7 @@ ENDIF
     DstParamData%Induction = SrcParamData%Induction
     DstParamData%kFrozenNWStart = SrcParamData%kFrozenNWStart
     DstParamData%kFrozenNWEnd = SrcParamData%kFrozenNWEnd
+    DstParamData%ConstantOverCycling = SrcParamData%ConstantOverCycling
  END SUBROUTINE FVW_CopyParam
 
  SUBROUTINE FVW_DestroyParam( ParamData, ErrStat, ErrMsg, DEALLOCATEpointers )
@@ -2192,6 +2194,7 @@ ENDIF
       Int_BufSz  = Int_BufSz  + 1  ! Induction
       Re_BufSz   = Re_BufSz   + 1  ! kFrozenNWStart
       Re_BufSz   = Re_BufSz   + 1  ! kFrozenNWEnd
+      Int_BufSz  = Int_BufSz  + 1  ! ConstantOverCycling
   IF ( Re_BufSz  .GT. 0 ) THEN 
      ALLOCATE( ReKiBuf(  Re_BufSz  ), STAT=ErrStat2 )
      IF (ErrStat2 /= 0) THEN 
@@ -2382,6 +2385,8 @@ ENDIF
     Re_Xferred = Re_Xferred + 1
     ReKiBuf(Re_Xferred) = InData%kFrozenNWEnd
     Re_Xferred = Re_Xferred + 1
+    IntKiBuf(Int_Xferred) = TRANSFER(InData%ConstantOverCycling, IntKiBuf(1))
+    Int_Xferred = Int_Xferred + 1
  END SUBROUTINE FVW_PackParam
 
  SUBROUTINE FVW_UnPackParam( ReKiBuf, DbKiBuf, IntKiBuf, Outdata, ErrStat, ErrMsg )
@@ -2599,6 +2604,8 @@ ENDIF
     Re_Xferred = Re_Xferred + 1
     OutData%kFrozenNWEnd = ReKiBuf(Re_Xferred)
     Re_Xferred = Re_Xferred + 1
+    OutData%ConstantOverCycling = TRANSFER(IntKiBuf(Int_Xferred), OutData%ConstantOverCycling)
+    Int_Xferred = Int_Xferred + 1
  END SUBROUTINE FVW_UnPackParam
 
  SUBROUTINE FVW_CopyWng_ContinuousStateType( SrcWng_ContinuousStateTypeData, DstWng_ContinuousStateTypeData, CtrlCode, ErrStat, ErrMsg )

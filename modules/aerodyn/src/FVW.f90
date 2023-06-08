@@ -582,7 +582,7 @@ subroutine FVW_UpdateStates( t, n, u, utimes, p, x, xd, z, OtherState, AFInfo, m
       m%ComputeWakeInduced = .FALSE.
    endif
    if (bReevaluation) then
-      print*,'[INFO] FVW: Update States: reevaluation at the same starting time'
+      call WrScr('[INFO] OLAF: Update States: reevaluation at the same starting time')
       call RollBackPreviousTimeStep() ! Cancel wake emission done in previous call
       m%ComputeWakeInduced = .TRUE.
    endif
@@ -595,6 +595,12 @@ subroutine FVW_UpdateStates( t, n, u, utimes, p, x, xd, z, OtherState, AFInfo, m
    nFWEff = min(m%nFW, p%nFWFree)
    ! --- Display some status to screen
    if (DEV_VERSION)  print'(A,F10.3,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,L1)','FVW status - t:',t,'  n:',n,'  nNW:',m%nNW-1,'-',nNWEff-1,'/',p%nNWMax-1,'  nFW:',nFWEff, '+',m%nFW-nFWEff,'=',m%nFW,'/',p%nFWMax,'  nP:',nP, 's Comp:',m%ComputeWakeInduced
+
+   if (p%ConstantOverCycling .and. (.not. m%ComputeWakeInduced)) then
+      !print*,'t',t, 'overcycl',bOverCycling, 'bReeval',bReevaluation,'ComputeWake',m%ComputeWakeInduced
+      !call WrScr('[INFO] FVW: Update States: skipping (ConstantOverCyling)')
+      return
+   endif
 
    ! --- Evaluation at t
    ! Inputs at t
@@ -1370,16 +1376,30 @@ subroutine CalcOutputForAD(u, p, x, y, m, ErrStat, ErrMsg)
    integer(IntKi)                :: ErrStat2
    character(ErrMsgLen)          :: ErrMsg2
    character(*), parameter       :: RoutineName = 'FVW_CalcOutput'
+   logical :: bOverCycling
+   logical :: doCompute !< True if we compute lifting line induced velocities
+
 
    ErrStat = ErrID_None
    ErrMsg  = ""
+
+   ! Check if computation needed
+   ! OverCycling DTfvw> DTaero
+   bOverCycling = p%DTfvw > p%DTaero
+   if(bOverCycling .and. p%ConstantOverCycling) then 
+      doCompute = m%ComputeWakeInduced .or. m%FirstCall
+   else
+      doCompute = .true.
+   endif
 !       ! --- NOTE: this below might not be needed
 !       ! Distribute the Wind we requested to Inflow wind to storage Misc arrays
 !       ! TODO ANDY: replace with direct call to inflow wind at m%W(iW)%CP location
 !       CALL DistributeRequestedWind_LL(u%V_wind, p, m%Vwnd_LL)
 ! 
-!       ! Control points location and structural velocity
-   call Wings_Panelling(u%WingsMesh, p, m, ErrStat2, ErrMsg2); call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+   if (doCompute) then
+      ! Control points location and structural velocity
+      call Wings_Panelling(u%WingsMesh, p, m, ErrStat2, ErrMsg2); call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+   endif
 ! 
 !    ! if we are on a correction step, CalcOutput may be called again with different inputs
 !    ! Compute m%W(iW)%Gamma_LL
@@ -1389,7 +1409,9 @@ subroutine CalcOutputForAD(u, p, x, y, m, ErrStat, ErrMsg)
    ! if     InductionAtCP : In: m%W%CP,  Out:m%W%Vind_CP                 and m%W%Vind_LL (averaged)
    ! if not InductionAtCP : In: m%W%r_LL,   Out:m%W%Vind_CP (interp/extrap) and m%W%Vind_LL
    if (p%Induction) then
-      call LiftingLineInducedVelocities(p, x, p%InductionAtCP, 1, m, ErrStat2, ErrMsg2); call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      if (doCompute) then
+         call LiftingLineInducedVelocities(p, x, p%InductionAtCP, 1, m, ErrStat2, ErrMsg2); call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      endif
       ! Transfer to output
       do iW=1,p%nWings
           y%W(iW)%Vind(1,:) = m%W(iW)%Vind_LL(1,:)
@@ -1424,7 +1446,6 @@ subroutine FVW_CalcOutput(t, u, p, x, xd, z, OtherState, y, m, ErrStat, ErrMsg)
    integer(IntKi)                :: ErrStat2
    character(ErrMsgLen)          :: ErrMsg2
    character(*), parameter       :: RoutineName = 'FVW_CalcOutput'
-   logical :: bOverCycling
    if (OLAF_PROFILING) call tic('FVW_CalcOutput')
 
    ErrStat = ErrID_None
@@ -1433,8 +1454,7 @@ subroutine FVW_CalcOutput(t, u, p, x, xd, z, OtherState, y, m, ErrStat, ErrMsg)
       print'(A,F10.3,A,L1,A,I0,A,I0)','CalcOutput     t:',t,'   ',m%FirstCall,'                                nNW:',m%nNW,' nFW:',m%nFW
    endif
 
-   ! OverCycling DTfvw> DTaero
-   bOverCycling = p%DTfvw > p%DTaero
+
 
    ! Compute induced velocity at AD nodes
    call CalcOutputForAD(u,p,x,y,m, ErrStat2, ErrMsg2)
