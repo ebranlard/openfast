@@ -46,6 +46,7 @@ IMPLICIT NONE
     INTEGER(IntKi), PUBLIC, PARAMETER  :: BEMMod_3D_NoPhiProj = 202      ! Same as 2, no PhiProj [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: BEMMod_3D_Manu = 300      ! Emmanuels implementation [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: BEMMod_3D_Iterative = 200      ! 3D BEM - Iterative method [-]
+    INTEGER(IntKi), PUBLIC, PARAMETER  :: BEMMod_3D_MomCorr = 250      ! 3D BEM - Momentum Correction [-]
 ! =========  BEMT_InitInputType  =======
   TYPE, PUBLIC :: BEMT_InitInputType
     REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: chord      !< Chord length at node [m]

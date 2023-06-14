@@ -61,6 +61,9 @@ module BEMTUnCoupled
    public :: GetEulerAnglesFromOrientation
    
    public :: VelocityIsZero
+
+
+   public :: BEMTU_Test_ACT_Relationship
 contains
    
 !..................................................................................................................................   
@@ -220,17 +223,18 @@ contains
          call getAirfoilOrientation( theta, cantAngle, toeAngle ,afAxialVec, afNormalVec, afRadialVec )
          if (BEM_Mod==BEMMod_3D .or. BEM_Mod==BEMMod_3D_NoVxCorr .or. BEM_Mod==BEMMod_3D_Iterative) then
             phiN = getNewPhi(phi,cantAngle)
+
          else if (BEM_Mod==BEMMod_3D_NoPhiProj) then
             phiN = phi
          else if (BEM_Mod==BEMMod_3D_Manu) then
 
             !R_ap: from polar to airfoil
-            R_ap(1,:) = afNormalVec 
-            R_ap(2,:) = afAxialVec
-            R_ap(3,:) = afRadialVec
+            !R_ap(1,:) = afNormalVec 
+            !R_ap(2,:) = afAxialVec
+            !R_ap(3,:) = afRadialVec
 
 
-            phiN = phi
+            !phiN = phi
             phiN = getNewPhi(phi,cantAngle)
 ! 
 !             inflowVec_p(1) = sin( phiN)
@@ -845,14 +849,14 @@ subroutine inductionFactors0(B, r, chord, phi, cn, ct, Vx, Vy, F, wakerotation, 
    ap_out    = real(    ap, ReKi )
 
 end subroutine inductionFactors0
-subroutine getTangentialInduction(a, cphi, sphi, Vx, F, kCorrectionFactor, sigma_p, ct, VxCorrected, effectiveYaw, H, MomentumCorr, ap, kp)
+subroutine getTangentialInduction(a, cphi, sphi, Vx, F, kpCorrectionFactor, sigma_p, ct, VxCorrected, effectiveYaw, H, MomentumCorr, ap, kp)
    real(ReKi), intent(in) :: Vx             !< velocity component [u%Vx]
    real(ReKi), intent(in) :: F              !< hub/tip loss correction factor
    logical,    intent(in) :: MomentumCorr   !< Include tangential induction in BEMT calculations [flag] [p%useTanInd]
    real(ReKi), intent(in) :: ct             !< tangential force coefficient (tangential to the plane, not chord) of the jth node in the kth blade; [y%cy]
    real(R8Ki), intent(in) :: sigma_p           ! local solidity (B*chord/(TwoPi*r))
    real(R8Ki), intent(in) :: sphi, cphi        ! sin(phi), cos(phi)
-   real(R8Ki), intent(in) :: VxCorrected, kCorrectionFactor
+   real(R8Ki), intent(in) :: VxCorrected, kpCorrectionFactor
    real(R8Ki), intent(in) :: effectiveYaw !
    real(R8Ki), intent(in) :: H              ! scaling factor to gradually phase out tangential induction when axial induction is near 1.0
    real(R8Ki), intent(in) :: a   ! double precision versions of output variables of similar name
@@ -868,15 +872,15 @@ subroutine getTangentialInduction(a, cphi, sphi, Vx, F, kCorrectionFactor, sigma
       
    else
       !H = smoothStep( real(a,ReKi), 0.8, 1.0, 1.0, 0.0 ) + smoothStep( real(a,ReKi), 1.0, 0.0, 1.2, 1.0 )
-      !kp = sigma_p*( cl*sphi - H*cd*cphi )/( 4.0*F*sphi*cphi )*kCorrectionFactor
+      !kp = sigma_p*( cl*sphi - H*cd*cphi )/( 4.0*F*sphi*cphi )*kpCorrectionFactor
       if (MomentumCorr) then             
           if (equalrealnos(a,1.0_R8Ki)) then
-              kp = 0.0_R8Ki !H*sigma_p*ct/( 4.0*F*sphi*cphi )*(kCorrectionFactor)
+              kp = 0.0_R8Ki !H*sigma_p*ct/( 4.0*F*sphi*cphi )*(kpCorrectionFactor)
           else
-              kp = H*sigma_p*ct/( 4.0*F*sphi*cphi )*(kCorrectionFactor)/sqrt(1+(tan(effectiveYaw)/(1.0_ReKi-a))**2)            
+              kp = H*sigma_p*ct/( 4.0*F*sphi*cphi )*(kpCorrectionFactor)/sqrt(1+(tan(effectiveYaw)/(1.0_ReKi-a))**2)            
           endif             
       else
-          kp = H*sigma_p*ct/( 4.0*F*sphi*cphi )*kCorrectionFactor
+          kp = H*sigma_p*ct/( 4.0*F*sphi*cphi )*kpCorrectionFactor
       endif
       
       if ( VxCorrected < 0.0_ReKi ) then
@@ -895,7 +899,7 @@ end subroutine getTangentialInduction
 !> This subroutine computes the induction factors (a) and (ap) along with the residual (fzero)
 subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,cantAngle, F, CHI0, wakerotation, &
    fzero_out, a_out, ap_out, MomentumCorr, xVelCorr, IsValidSolution, k_out, kp_out, &
-   Vrel2_a, Vrelx_p, Vrely_p)
+   Vrel2_a, Vrelx_p, Vrely_p, phi_p)
 
    implicit none
 
@@ -925,6 +929,7 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
    real(ReKi), intent(in), optional :: Vrel2_a
    real(ReKi), intent(in), optional :: Vrelx_p
    real(ReKi), intent(in), optional :: Vrely_p
+   real(ReKi), intent(in), optional :: phi_p ! Flow angle in polar system
    
    ! local variables
    ! NOTE!!!  Double precision is used here to help the numerics which become
@@ -939,6 +944,7 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
    
    
    real(R8Ki)            :: k0
+   real(R8Ki)            :: a0_local
    real(R8Ki)            :: H              ! scaling factor to gradually phase out tangential induction when axial induction is near 1.0
    real(R8Ki)            :: fzero, a, ap   ! double precision versions of output variables of similar name
    
@@ -985,11 +991,12 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
 
    elseif (BEM_Mod==BEMMod_3D_Manu) then
       !VxCorrected = Vx ! NOTE: this is Vxp
-      VxCorrected = Vx 
+      !VxCorrected = Vx  * cos(cantAngle) ! Needed for fzero equilibrium
+      VxCorrected = Vx  * cos(cantAngle) ! Needed for fzero equilibrium
       VxCorrected2 = Vx
       kCorrectionFactor  = 1.0_R8Ki
       kpCorrectionFactor  = kCorrectionFactor
-      k = sigma_p*cn/(4.0_R8Ki*F*sphi*sphi) /drdz
+      k = sigma_p*cn/(4.0_R8Ki*F*sphi*sphi) *cos(cantAngle)**2/drdz
    elseif (BEM_Mod==BEMMod_3D_Iterative) then
       ! 
       VxCorrected = Vx 
@@ -1005,8 +1012,31 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
 
 
    !k = sign( k, real(phi,R8Ki) )
-   k0 = a0(effectiveYaw) / (1.0-a0(effectiveYaw))
-   if (.not.MomentumCorr) then 
+   !k0 = a0(effectiveYaw) / (1.0-a0(effectiveYaw))
+   a0_local = a0(effectiveYaw)
+   k0 = a0_local / (1.0_R8Ki-a0_local)
+   if (BEM_Mod==BEMMod_3D_Manu) then
+      !!! --- Momentum Corr
+      !if (k <= k0 ) then
+      !    if (VxCorrected2 > 0.0) then
+      !        a = k/(k+1.0)
+      !    else
+      !        a = k/(k-1.0)
+      !    end if
+      !    !a = a * cos(chi0) ! MANU HACK
+      !    H = 1.0_R8Ki
+      !else
+      !!   ! NOTE: only happens at early iterations
+      !!  !call axialInductionFromGlauertMomentum(effectiveYaw, phi, k, F, a, H, .false.)  ! return a ! <<< GOOD
+      !!  !call axialInductionFromEmpiricalThrust(effectiveYaw, phi, k, F, a, H, .false.)  ! return a ! Not as good
+      !!  !a = sign(a,k)
+      !  a = 0.0
+      !endif
+      call axialInductionFromGlauertMomentum(effectiveYaw, phi, k, F, a, H, .true.) 
+      a = sign(a,k)
+
+      H=1.0 ! < Gradually phase out tangential induction
+   elseif (.not.MomentumCorr) then 
        if (k <= k0 ) then
            if (VxCorrected2 > 0.0) then
                a = k/(k+1.0)
@@ -1018,8 +1048,9 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
            call axialInductionFromEmpiricalThrust( effectiveYaw, phi, k, F, a, H, MomentumCorr )
        endif
    else       
-       call axialInductionFromGlauertMomentum(effectiveYaw, phi, k, F, a, H, MomentumCorr) 
-       a = sign(a,k)
+      ! --- Momentum Corr
+      call axialInductionFromGlauertMomentum(effectiveYaw, phi, k, F, a, H, MomentumCorr) 
+      a = sign(a,k)
    endif
 
    
@@ -1027,6 +1058,8 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
    ! compute tangential induction factor:
    !.....................................................
    if (wakerotation) then 
+      ! NOTE: No momentum corr for tangential induction not that important
+      !call getTangentialInduction(a, cphi, sphi, Vx, F, kpCorrectionFactor, sigma_p, ct, VxCorrected, effectiveYaw, H, .false., ap, kp)
       call getTangentialInduction(a, cphi, sphi, Vx, F, kpCorrectionFactor, sigma_p, ct, VxCorrected, effectiveYaw, H, MomentumCorr, ap, kp)
    else 
       
@@ -1045,6 +1078,7 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
        fzero = sphi/(1.0_R8Ki-a)
    else
        if (momentumCorr) then
+           ! NOTE: not that important
            fzero = sphi/(1.0_R8Ki-a) - VxCorrected/Vy*cphi/(1.0_R8Ki+ap)!sphi*Vy(1.0_R8Ki+ap) - cphi*(1.0_R8Ki-a)*VxCorrected  !sphi*Vy*(1.0_R8Ki+ap) - cphi*VxCorrected*(1.0_R8Ki-a)!cphi/(1.0_R8Ki+ap)*(1.0_R8Ki-a)-sphi*Vy/VxCorrected 
        else
            fzero = sphi/(1.0_R8Ki-a) - VxCorrected/Vy*cphi/(1.0_R8Ki+ap)
@@ -1166,15 +1200,11 @@ subroutine axialInductionFromGlauertMomentum(chi0, phi, k, F, axInd, H,momentumC
     logical,    intent(in) :: momentumCorr
     real(R8Ki), intent(out):: axInd
     real(R8Ki), intent(out):: H
-    real(R8Ki)             :: c11, c12, coeffs(5), previousRoot
+    real(R8Ki)             :: c11, c12, coeffs(5)
     complex(R8Ki)          :: roots(4)
     real(R8Ki)             :: a0_local
-    real(R8Ki)             :: c2, c1, c0 ! Empirical CT = c2*a^2 + c1*a + c0 for a > a0
     real(R8Ki)             :: k0
     real(R8Ki)             :: tan_chi0
-    
-    ! Get Coefficients for Empirical CT
-    call getEmpiricalCoefficients( chi0, F, c0, c1, c2,momentumCorr)
     
     a0_local = a0(chi0)
     k0 = a0_local / (1.0-a0_local)
@@ -1200,8 +1230,6 @@ subroutine axialInductionFromGlauertMomentum(chi0, phi, k, F, axInd, H,momentumC
         else           
            axInd = min(real(roots(1)),real(roots(2)))
         endif
-       
-        previousRoot = axInd    
         H = 1.0_R8Ki
     else !if (k > k0) then ! High induction/ empirical correction        
         call axialInductionFromEmpiricalThrust( chi0, phi, k, F, axInd, H, momentumCorr )           
@@ -1378,7 +1406,9 @@ real(reKi) function getHubTipLossCorrection(BEM_Mod, useHubLoss, useTipLoss, hub
       else if (BEM_Mod==BEMMod_3D_NoPhiProj) then
          phiN = phi
       else if (BEM_Mod==BEMMod_3D_Manu) then
-         phiN = phi
+
+         phiN = getNewPhi(phi,cantAngle)
+
       else if (BEM_Mod==BEMMod_3D_Iterative) then
          phiN = phi
       else
@@ -1438,5 +1468,53 @@ FUNCTION GetEulerAnglesFromOrientation(EulerDCM,orientation) RESULT(theta)
    end if
 end function
 !-----------------------------------------------------------------------------------------
+
+
+
+!> Simple test for a-Ct relationship. 
+subroutine BEMTU_Test_ACT_Relationship()
+   real(R8Ki) :: chi0
+   real(R8Ki) :: delta_chi
+   real(ReKi) :: F
+   logical :: momentumCorr
+   integer :: i
+   integer :: iUnit
+   real(R8Ki)              :: c2, c1, c0 ! Empirical CT = c2*a^2 + c1*a + c0 for a > a0
+   ! Get Coefficients for Empirical CT
+   iUnit = 123
+
+   ! --- No Momentum Corr, F=1
+   F=1; momentumCorr=.False.
+   call parametricStudy('ACTCoeffs_F10_NoCo.csv')
+   ! --- No Momentum Corr, F=0.5
+   F=0.5; momentumCorr=.False.
+   call parametricStudy('ACTCoeffs_F05_NoCo.csv')
+   ! --- Momentum Corr, F=1
+   F=1; momentumCorr=.True.
+   call parametricStudy('ACTCoeffs_F10_Corr.csv')
+   ! --- Momentum Corr, F=0.5
+   F=0.5; momentumCorr=.True.
+   call parametricStudy('ACTCoeffs_F05_Corr.csv')
+
+   STOP
+  
+contains
+   subroutine parametricStudy(filename)
+      character(len=*) :: filename
+      chi0=-50 * D2R
+      open(unit=iUnit, file=filename)
+      write(iUnit, '(5(A15))') 'chi0', 'c0', 'c1', 'c2', 'F'
+      do i=1,21
+         call getEmpiricalCoefficients(chi0 ,F , c0, c1, c2, momentumCorr)
+         write(iUnit,'(5(F15.5))') chi0*R2D, c0, c1, c2, F
+         chi0 = chi0 + 5*D2R
+      enddo
+      close(iUnit)
+   end subroutine
+  
+  
+
+end subroutine BEMTU_Test_ACT_Relationship
+
 
 end module BEMTUncoupled

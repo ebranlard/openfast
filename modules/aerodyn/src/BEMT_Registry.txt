@@ -28,6 +28,7 @@ param     BEMT/BEMT                   -                              INTEGER    
 param     BEMT/BEMT                   -                              INTEGER                 BEMMod_3D_NoPhiProj         -      202   -   "Same as 2, no PhiProj" -
 param     BEMT/BEMT                   -                              INTEGER                 BEMMod_3D_Manu              -      300   -   "Emmanuels implementation" -
 param     BEMT/BEMT                   -                              INTEGER                 BEMMod_3D_Iterative         -      200   -   "3D BEM - Iterative method" -
+param     BEMT/BEMT                   -                              INTEGER                 BEMMod_3D_MomCorr           -      250   -   "3D BEM - Momentum Correction" -
 
 #
 #

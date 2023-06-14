@@ -2757,8 +2757,11 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
          m%BEMT_u(indx)%Vz(j,k) = dot_product( tmp, m%orientationAnnulus(3,:,j,k) ) ! radial component (tangential to the plane, not chord) of the inflow velocity of the jth node in the kth blade
 
          ! NOTE: We'll likely remove that:
-         m%BEMT_u(indx)%xVelCorr(j,k) = TwoNorm(m%DisturbedInflow(:,j,k))*(             sin(yaw)*sin(-m%BEMT_u(indx)%cantAngle(j,k))*sin(m%BEMT_u(indx)%psi(k)) &
-                                                                            + sin(tilt)*cos(yaw)*sin(-m%BEMT_u(indx)%cantAngle(j,k))*cos(m%BEMT_u(indx)%psi(k)) ) !m%BEMT_u(indx)%Vy(j,k)*sin(-theta(2))*sin(m%BEMT_u(indx)%psi(k))
+        !m%BEMT_u(indx)%xVelCorr(j,k) = TwoNorm(m%DisturbedInflow(:,j,k))*(             sin(yaw)*sin(-m%BEMT_u(indx)%cantAngle(j,k))*sin(m%BEMT_u(indx)%psi(k)) &
+!                                                                            + sin(tilt)*cos(yaw)*sin(-m%BEMT_u(indx)%cantAngle(j,k))*cos(m%BEMT_u(indx)%psi(k)) ) !m%BEMT_u(indx)%Vy(j,k)*sin(-theta(2))*sin(m%BEMT_u(indx)%psi(k))
+!
+         m%BEMT_u(indx)%xVelCorr(j,k) = 0.0_ReKi ! TODO
+                                               
       end do !j=nodes
    end do !k=blades
 
@@ -4070,9 +4073,18 @@ SUBROUTINE Init_BEMTmodule( InputFileData, RotInputFileData, u_AD, u, p, p_AD, x
          InitInp%BEM_Mod    = -1
          call SetErrStat(ErrID_Fatal, "AeroProjMod needs to be 1 or 2 when used with BEM", ErrStat, ErrMsg, RoutineName)   
       endif
+   else if (p%AeroBEM_Mod== BEMMod_3D_MomCorr) then
+         InitInp%BEM_Mod  = BEMMod_3D
+         InitInp%MomentumCorr = .TRUE. 
    endif
    p%AeroBEM_Mod = InitInp%BEM_Mod ! Very important, for consistency
-   call WrScr('   AeroDyn: projMod: '//trim(num2lstr(p%AeroProjMod))//', BEM_Mod:'//trim(num2lstr(InitInp%BEM_Mod)))
+   ! 
+
+   if (InitInp%MomentumCorr) then
+      call WrScr('   AeroDyn: projMod: '//trim(num2lstr(p%AeroProjMod))//', BEM_Mod:'//trim(num2lstr(InitInp%BEM_Mod))//', Momentum Correction')
+   else 
+      call WrScr('   AeroDyn: projMod: '//trim(num2lstr(p%AeroProjMod))//', BEM_Mod:'//trim(num2lstr(InitInp%BEM_Mod)))
+   endif
       ! remove the ".AD" from the RootName
    k = len_trim(InitInp%RootName)
    if (k>3) then
