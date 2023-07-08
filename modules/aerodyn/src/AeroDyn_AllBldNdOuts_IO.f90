@@ -206,8 +206,6 @@ SUBROUTINE Calc_WriteAllBldNdOutput( p, p_AD, u, m, m_AD, x, y, OtherState, Indx
    real(ReKi)                                   :: M_ph(3,3)               ! Transformation from hub to "blade-rotor-plane": n,t,r (not the same as AeroDyn)
    real(ReKi)                                   :: M_pg(3,3,p%NumBlades)   ! Transformation from global to "blade-rotor-plane" (n,t,r), with same x at hub coordinate system
    real(ReKi)                                   :: psi_hub                 ! Azimuth wrt hub
-   real(ReKi)                                   :: Vind_g(3)               ! Induced velocity vector in global coordinates
-   real(ReKi)                                   :: Vind_s(3)               ! Induced velocity vector in section coordinates (AeroDyn "x-y")
  
 
          ! Initialize some things
@@ -1161,66 +1159,30 @@ SUBROUTINE Calc_WriteAllBldNdOutput( p, p_AD, u, m, m_AD, x, y, OtherState, Indx
             ! Inductions in polar rotating hub coordinates
             ! Axial induction, polar rotating hub coordinates
          CASE ( BldNd_Uin )
-            if (p_AD%WakeMod /= WakeMod_FVW) then
-               DO IdxBlade=1,p%BldNd_BladesOut
-                  DO IdxNode=1,u%BladeMotion(IdxBlade)%NNodes
-                     Vind_s = (/ -m%BEMT_u(Indx)%Vx(IdxNode,IdxBlade)*m%BEMT_y%axInduction(IdxNode,IdxBlade), m%BEMT_u(Indx)%Vy(IdxNode,IdxBlade)*m%BEMT_y%tanInduction(IdxNode,IdxBlade), 0.0_ReKi /)
-                     Vind_g = matmul(Vind_s, m%orientationAnnulus(:,:,IdxNode,IdxBlade))
-                     y%WriteOutput( OutIdx ) = dot_product(M_pg(1,1:3,IdxBlade), Vind_g(1:3) ) ! Uihn, hub normal
-                     OutIdx = OutIdx + 1
-                  ENDDO
+            DO IdxBlade=1,p%BldNd_BladesOut
+               DO IdxNode=1,u%BladeMotion(IdxBlade)%NNodes
+                  y%WriteOutput( OutIdx ) = dot_product(M_pg(1,1:3,IdxBlade), m%Vind_i(1:3, IdxNode, IdxBlade )) ! Uihn, hub normal
+                  OutIdx = OutIdx + 1
                ENDDO
-            else
-               DO IdxBlade=1,p%BldNd_BladesOut
-                  iW = p_AD%FVW%Bld2Wings(iRot, IdxBlade)
-                  DO IdxNode=1,u%BladeMotion(IdxBlade)%NNodes
-                     y%WriteOutput( OutIdx ) = dot_product(M_pg(1,1:3,IdxBlade), m_AD%FVW_y%W(iW)%Vind(1:3,IdxNode) ) ! Uihn, hub normal
-                     OutIdx = OutIdx + 1
-                  ENDDO
-               ENDDO
-            endif
+            ENDDO
 
             ! Tangential induction, polar rotating hub coordinates
          CASE ( BldNd_Uit )
-            if (p_AD%WakeMod /= WakeMod_FVW) then
-               DO IdxBlade=1,p%BldNd_BladesOut
-                  DO IdxNode=1,u%BladeMotion(IdxBlade)%NNodes
-                     Vind_s = (/ -m%BEMT_u(Indx)%Vx(IdxNode,IdxBlade)*m%BEMT_y%axInduction(IdxNode,IdxBlade), m%BEMT_u(Indx)%Vy(IdxNode,IdxBlade)*m%BEMT_y%tanInduction(IdxNode,IdxBlade), 0.0_ReKi /)
-                     Vind_g = matmul(Vind_s, m%orientationAnnulus(:,:,IdxNode,IdxBlade))
-                     y%WriteOutput( OutIdx ) = dot_product(M_pg(2,1:3,IdxBlade), Vind_g(1:3) ) ! Uiht, hub tangential
-                     OutIdx = OutIdx + 1
-                  ENDDO
+            DO IdxBlade=1,p%BldNd_BladesOut
+               DO IdxNode=1,u%BladeMotion(IdxBlade)%NNodes
+                  y%WriteOutput( OutIdx ) = dot_product(M_pg(2,1:3,IdxBlade), m%Vind_i(1:3, IdxNode, IdxBlade )) ! Uiht, hub tangential
+                  OutIdx = OutIdx + 1
                ENDDO
-            else
-               DO IdxBlade=1,p%BldNd_BladesOut
-                  iW = p_AD%FVW%Bld2Wings(iRot, IdxBlade)
-                  DO IdxNode=1,u%BladeMotion(IdxBlade)%NNodes
-                     y%WriteOutput( OutIdx ) = dot_product(M_pg(2,1:3,IdxBlade), m_AD%FVW_y%W(iW)%Vind(1:3,IdxNode) ) ! Uiht, hub tangential
-                     OutIdx = OutIdx + 1
-                  ENDDO
-               ENDDO
-            endif
+            ENDDO
  
             ! Radial induction, polar rotating hub coordinates
          CASE ( BldNd_Uir )
-            if (p_AD%WakeMod /= WakeMod_FVW) then
-               DO IdxBlade=1,p%BldNd_BladesOut
-                  DO IdxNode=1,u%BladeMotion(IdxBlade)%NNodes
-                     Vind_s = (/ -m%BEMT_u(Indx)%Vx(IdxNode,IdxBlade)*m%BEMT_y%axInduction(IdxNode,IdxBlade), m%BEMT_u(Indx)%Vy(IdxNode,IdxBlade)*m%BEMT_y%tanInduction(IdxNode,IdxBlade), 0.0_ReKi /)
-                     Vind_g = matmul(Vind_s, m%orientationAnnulus(:,:,IdxNode,IdxBlade))
-                     y%WriteOutput( OutIdx ) = dot_product(M_pg(3,1:3,IdxBlade), Vind_g(1:3) ) ! Uihr, hub radial
-                     OutIdx = OutIdx + 1
-                  ENDDO
+            DO IdxBlade=1,p%BldNd_BladesOut
+               DO IdxNode=1,u%BladeMotion(IdxBlade)%NNodes
+                  y%WriteOutput( OutIdx ) = dot_product(M_pg(3,1:3,IdxBlade), m%Vind_i(1:3, IdxNode, IdxBlade )) ! Uihr, hub radial
+                  OutIdx = OutIdx + 1
                ENDDO
-            else
-               DO IdxBlade=1,p%BldNd_BladesOut
-                  iW = p_AD%FVW%Bld2Wings(iRot, IdxBlade)
-                  DO IdxNode=1,u%BladeMotion(IdxBlade)%NNodes
-                     y%WriteOutput( OutIdx ) = dot_product(M_pg(3,1:3,IdxBlade), m_AD%FVW_y%W(iW)%Vind(1:3,IdxNode) ) ! Uihr, hub radial
-                     OutIdx = OutIdx + 1
-                  ENDDO
-               ENDDO
-            endif
+            ENDDO
 
             ! Normal buoyant force (to chord), tangential buoyant force (to chord), spanwise buoyant force
          CASE ( BldNd_Fbn )

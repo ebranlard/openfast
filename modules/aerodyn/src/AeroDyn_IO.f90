@@ -356,7 +356,7 @@ CONTAINS
          m%AllOuts( RtAeroCq ) = m%AllOuts( RtAeroMxh ) / (denom * rmax )
          m%AllOuts( RtAeroCt ) = m%AllOuts( RtAeroFxh ) /  denom
       end if
-      
+
 
       ! TailFin
       if (p%TFinAero) then
@@ -378,11 +378,23 @@ CONTAINS
    subroutine Calc_WriteOutput_BEMT()
       REAL(R8Ki)                                   :: orient(3,3)
       REAL(R8Ki)                                   :: theta(3)
+      REAL(ReKi)                                   :: Vind_s(3)  ! Induced velocity in "w" or "p" system
+      REAL(ReKi)                                   :: Vind_p(3)
       REAL(ReKi)                                   :: denom !, rmax
       REAL(ReKi)                                   :: ct, st ! cosine, sine of theta
       REAL(ReKi)                                   :: cp, sp ! cosine, sine of phi
  
 
+      ! Induced velocity in Global
+      do k=1,min(p%numBlades,3)
+         do j=1,u%BladeMotion(k)%NNodes
+            !if(p%BEM_Mod==BEMMod_2D) then
+            ! NOTE: if BEMMod_2D:   x & y are in "w" system (WithoutSweepPitchTwist)
+            !       if BEMMod_3D:   x & y are in "p" system (element polar system)
+            Vind_s = (/ -m%BEMT_u(indx)%Vx(j,k)*m%BEMT_y%axInduction(j,k), m%BEMT_u(indx)%Vy(j,k)*m%BEMT_y%tanInduction(j,k), 0.0_ReKi /)
+            m%Vind_i(:,j,k) = matmul(Vind_s, m%orientationAnnulus(:,:,j,k)) ! TODO rename orientationAnnulus
+         enddo
+      enddo
 
 
    
@@ -461,6 +473,16 @@ CONTAINS
    !!       Make sure these are set!
    subroutine Calc_WriteOutput_FVW
       integer    :: iW
+
+      ! Induced velocity in global
+      ! FVW already return this, we do a simple copy from Wings to Blades
+      do k=1,min(p%numBlades,3)
+         iW = p_AD%FVW%Bld2Wings(iRot, k)
+         do j=1,u%BladeMotion(k)%NNodes
+            m%Vind_i(:,j,k) = m_AD%FVW_y%W(iW)%Vind(1:3,j)
+         enddo
+      enddo
+
 
          ! blade outputs
       do k=1,min(p%numBlades,3)

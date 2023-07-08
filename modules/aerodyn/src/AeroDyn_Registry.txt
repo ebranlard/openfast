@@ -276,6 +276,7 @@ typedef	^	RotMiscVarType	ReKi	M	{:}{:}	-	-	"pitching moment per unit length of t
 typedef	^	RotMiscVarType	ReKi	Mx	{:}{:}	-	-	"pitching moment per unit length of the jth node in the kth blade (in x direction)"	Nm/m
 typedef	^	RotMiscVarType	ReKi	My	{:}{:}	-	-	"pitching moment per unit length of the jth node in the kth blade  (in y direction)"	Nm/m
 typedef	^	RotMiscVarType	ReKi	Mz	{:}{:}	-	-	"pitching moment per unit length of the jth node in the kth blade  (in z direction)"	Nm/m
+typedef	^	RotMiscVarType	ReKi	Vind_i	{:}{:}{:}	-	-	"Induced velocities at jth node and kth blade (3xnSpanxnB)"	m/s
 typedef	^	RotMiscVarType	ReKi	V_DiskAvg	{3}	-	-	"disk-average relative wind speed (using disturbed wind, envision uses undisturbed wind)"	m/s
 typedef	^	RotMiscVarType	ReKi	yaw			-	-	-	    "Yaw calculated in  SetInputsForBEMT"	rad
 typedef	^	RotMiscVarType	ReKi	tilt		-	-	-	    "tilt calculated in  SetInputsForBEMT"	rad
