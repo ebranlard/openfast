@@ -1236,40 +1236,69 @@ subroutine axialInductionFromGlauertMomentum(chi0, phi, k, F, axInd, H,momentumC
     endif  
 end subroutine axialInductionFromGlauertMomentum
 
-subroutine getEmpiricalCoefficients( chi0, F, c0, c1, c2, MomentumCorr ) 
+!> Compute the coefficients of a second order polynomial that extends the Momenutm relationship CT(a) 
+!! above a value a>ac. The continuation is done such that the slope and value at a=a_c match 
+!! the momentum relation. The last constraint is the value of CT at a=1. 
+!! Currently a hard-coded model is used for the value at at=1.
+!! The polynomial is:
+!!    CT(a) = c0 + c1*a + c2*a2    a>ac
+!! obtained with the constraints:
+!!    CT(a_c)     = CT_c
+!!    CT(1)       = CT_1
+!!    dCT/da(a_c) = s_c
+subroutine getEmpiricalCoefficients( chi0, F, c0, c1, c2, SkewCorrection ) 
    real(R8Ki), intent(in) :: chi0
    real(ReKi), intent(in) :: F
-   logical,    intent(in) :: MomentumCorr
+   logical,    intent(in) :: SkewCorrection ! If True, use Glauert's Skew Momentum formulation
    real(R8Ki), intent(inout) :: c0, c1, c2 ! Empirical CT = c2*a^2 + c1*a + c0 for a > a0
-   real(R8Ki) :: a0_local
-   real(R8Ki) :: CTata1
-   real(R8Ki) :: denom, temp1, temp2
+   real(R8Ki):: c0b, c1b, c2b ! Empirical CT = c2*a^2 + c1*a + c0 for a > a0
+   real(R8Ki) :: ac
+   real(R8Ki) :: CT_1, CT_c
+   real(R8Ki) :: s_c !< Slope at a=ac
+   real(R8Ki) :: denom, tanchi2
    
    ! Empirical CT = 4*a*(1-a)*F = c2*a^2 + c1*a + c0 for a > a0
-   ! third Boundary condition (CT@a=1) is based on equations from Bladed. 
-   a0_local = a0(chi0)
-   denom = (a0_local**2 - 2.0_R8Ki*a0_local + 1.0_R8Ki)
-   if (MomentumCorr) then
-       temp2 = (min(MaxTanChi0, max(-MaxTanChi0, tan(chi0))))**2
-       temp1 = sqrt((a0_local-1)**2 +temp2)
-       
-       CTata1 = sqrt(((-0.64755/(cos(chi0)*cos(chi0)) - 0.8509/cos(chi0) + 3.4984)*F)**2 + 16*temp2)
-       CTata1 = max( 1.0_R8Ki, CTata1 ) 
-       
-       c2 = (CTata1 - 4*F/temp1 + 16*F*a0_local/temp1 - 4*F*a0_local*temp1 - 4*temp2*F/temp1 - 20*F*(a0_local**2)/temp1 + 8*F*(a0_local**3)/temp1 + 4*temp2*F*a0_local/temp1 ) /denom
-       c1 = 2*( 2*F/temp1 - a0_local*CTata1 - 6*F*a0_local/temp1 + 2*temp2*F/temp1 + 2*F*(a0_local**2)/temp1 + 4*F*(a0_local**2)*temp1 + 6*F*(a0_local**3)/temp1 - 4*F*(a0_local**4)/temp1 - 2*temp2*F*(a0_local**2)/temp1 )/denom
-       c0 = a0_local*( a0_local*CTata1 - 4*F/temp1 + 4*F*temp1 + 16*F*a0_local/temp1 - 8*F*a0_local*temp1 - 4*temp2*F/temp1 - 20*F*(a0_local**2)/temp1 + 8*F*(a0_local**3)/temp1 + 4*temp2*F*a0_local/temp1 )/denom
-       
+   ac = a0(chi0) ! critical value above which we extent momentum theory with a 2nd order polynomial
+   if (SkewCorrection) then
+       ! Continuation of Glauert Skew Momentum    CT= 4 a F sqrt( (1-a)^2 + tan(chi)^2 ) 
+       ! Using a second 
+       tanchi2 = (min(MaxTanChi0, max(-MaxTanChi0, tan(chi0))))**2
+       ! Note: model below may be changed. Note that it's not linear wrt F!
+       CT_1 = max( 1.0_R8Ki, sqrt(((-0.64755/(cos(chi0)*cos(chi0)) - 0.8509/cos(chi0) + 3.4984)*F)**2 + 16*tanchi2))  ! CT(1)
+       CT_c = 4._R8Ki*F*ac * sqrt( (1._R8Ki-ac)**2 + tanchi2 )                            ! CT(ac)
+       s_c  = 4._R8Ki*F*(1._R8Ki-3*ac+2._R8Ki*ac**2+tanchi2)/sqrt( (1-ac)**2 + tanchi2 )  ! dCT/da(ac) (slope)
    else
-       CTata1 = (-0.64755/(cos(chi0)*cos(chi0)) - 0.8509/cos(chi0) + 3.4984)*F      
-       CTata1 = max( 1.0_R8Ki, CTata1 )       
-       c2 =  (-4.0_R8Ki*F*a0_local**2 + 8.0_R8Ki*F*a0_local - 4.0_R8Ki*F + CTata1)/denom    
-       c1 = 2.0_R8Ki*(2.0_R8Ki*F*a0_local**2 - CTata1*a0_local - 4.0_R8Ki*F*a0_local  + 2.0_R8Ki*F)/denom    
-       c0 = CTata1*(a0_local**2)/denom
+       ! Continuation of Glauert Momentum    CT= 4 a F (1-a)
+       CT_1 = max( 1.0_R8Ki, (-0.64755/(cos(chi0)*cos(chi0)) - 0.8509/cos(chi0) + 3.4984)*F ) ! CT(1)
+       CT_c = 4._R8Ki*F*ac * (1._R8Ki-ac)                                                     ! CT(ac)
+       s_c  = 4._R8Ki*F*(1._R8Ki-2._R8Ki*ac)                                                  ! dCT/da(ac) (slope)
+       call secondOrderCoeffC1(ac, s_c, CT_c, CT_1, c0, c1, c2)
    endif
-   
+   call secondOrderCoeffC1(ac, s_c, CT_c, CT_1, c0, c1, c2)
    
 end subroutine getEmpiricalCoefficients
+
+!> Compute the polynomial coefficients for a second-order polynomial such that:
+!!    CT(a) = c0 + c1*a + c2*a2 
+!!  with the following constraints to make it C1-continuous at a=ac 
+!!    CT(a_c)     = CT_c
+!!    dCT/da(a_c) = s_c
+!!  and a constraint at a=1
+!!    CT(1)       = CT_1
+!!  The 3 coefficients are entirely determined from the three constraints
+subroutine secondOrderCoeffC1(a_c, s_c, CT_c, CT_1, c0, c1,c2)
+   real(R8Ki), intent(in ) :: a_c        !< value of a above which C1-continuation is sought
+   real(R8Ki), intent(in ) :: s_c        !< dCT/da(a_c),  slope at a=a_c
+   real(R8Ki), intent(in ) :: CT_c       !< CT(a_c), value at a=a_c
+   real(R8Ki), intent(in ) :: CT_1       !< CT(1), value at a=1
+   real(R8Ki), intent(out) :: c0, c1, c2 !< coefficients of the second order polynomial
+   real(R8Ki) :: denom
+   denom = (a_c**2 - 2._R8Ki*a_c + 1.0_R8Ki)
+   c0 = (CT_1*a_c**2 - 2._R8Ki*CT_c*a_c + CT_c + a_c**2*s_c - a_c*s_c)/denom
+   c1 = (-2._R8Ki*CT_1*a_c + 2._R8Ki*CT_c*a_c - a_c**2*s_c + s_c)/denom
+   c2 = (CT_1 - CT_c + a_c*s_c - s_c)/denom
+end subroutine secondOrderCoeffC1
+
 subroutine limitInductionFactors(a,ap)
    real(ReKi), intent(inout)           :: a   ! axial induction
    real(ReKi), intent(inout), optional :: ap  ! tangential induction
