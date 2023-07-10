@@ -288,6 +288,9 @@ end function computeAirfoilAOA
 
 
 !..................................................................................................................................
+!> Transform the aerodynamic coefficients (Cl,Cd,Cm) (directed based on Vrel_xy_a )
+!! from the airfoil coordinate system (a) to the without sweep pitch coordinate system (w)
+!! NOTE: "Cy" is currently "-Cyw"
 subroutine Transform_ClCd_to_CxCy( phi, useAIDrag, useTIDrag, Cl, Cd, Cx, Cy )
    real(ReKi),             intent(in   ) :: phi
    logical,                intent(in   ) :: useAIDrag
@@ -303,12 +306,14 @@ subroutine Transform_ClCd_to_CxCy( phi, useAIDrag, useTIDrag, Cl, Cd, Cx, Cy )
    sphi = sin(phi)
    
       ! resolve into normal (x) and tangential (y) forces
+   ! Cx = Cxw
    if (  useAIDrag ) then
       Cx = Cl*cphi + Cd*sphi
    else      
       Cx = Cl*cphi
    end if
     
+   ! Cy = -Cyw
    if (  useTIDrag ) then     
       Cy = Cl*sphi - Cd*cphi
    else     
@@ -317,6 +322,9 @@ subroutine Transform_ClCd_to_CxCy( phi, useAIDrag, useTIDrag, Cl, Cd, Cx, Cy )
    
 end subroutine Transform_ClCd_to_CxCy
 !----------------------------------------------------------------------------------------------------------------------------------
+!> Transform the aerodynamic coefficients (Cl,Cd,Cm) (directed based on Vrel_xy_a )
+!! from the airfoil coordinate system (a) to the polar coordinate system (p)
+!! NOTE: "Cy" is currently "-Cyp"
 subroutine Transform_ClCdCm_to_CxCyCzCmxCmyCmz( phi, theta, cant,toeAngle ,useAIDrag, useTIDrag, AOA, Cl, Cd, Cm, Cx, Cy, Cz, Cmx, Cmy, Cmz )
 
    implicit none
@@ -333,9 +341,9 @@ subroutine Transform_ClCdCm_to_CxCyCzCmxCmyCmz( phi, theta, cant,toeAngle ,useAI
    real(ReKi), intent(in   ) :: Cm
    real(ReKi), intent(  out) :: Cx, Cy, Cz
    real(ReKi), intent(  out) :: Cmx, Cmy, Cmz
-   real(ReKi)                :: afAxialVec(3)
-   real(ReKi)                :: afNormalVec(3)
-   real(ReKi)                :: afRadialVec(3)
+   real(ReKi)                :: afAxialVec(3)  !xhat_a_in_p
+   real(ReKi)                :: afNormalVec(3) !yhat_a_in_p
+   real(ReKi)                :: afRadialVec(3) !zhat_a_in_p
    real(ReKi)                :: coeffVec(3)
    real(ReKi)                :: Cn
    real(ReKi)                :: Ct
@@ -344,11 +352,13 @@ subroutine Transform_ClCdCm_to_CxCyCzCmxCmyCmz( phi, theta, cant,toeAngle ,useAI
    call getAirfoilOrientation( theta, cant, toeAngle, afAxialVec, afNormalVec, afRadialVec )   
 
    ! transform force coefficients into airfoil frame
+   ! Cn = Cxa
    if ( useAIDrag ) then
       Cn = Cl*cos(AOA) + Cd*sin(AOA)
    else
       Cn = Cl*cos(AOA)
    end if
+   ! Ct = Cya
    if ( useTIDrag ) then
       Ct = -Cl*sin(AOA) + Cd*cos(AOA)
    else
@@ -357,9 +367,9 @@ subroutine Transform_ClCdCm_to_CxCyCzCmxCmyCmz( phi, theta, cant,toeAngle ,useAI
    
    ! Put force coefficients back into rotor plane reference frame
    coeffVec = Cn*afNormalVec + Ct*afAxialVec
-   Cx = coeffVec(1)
-   Cy = -coeffVec(2)
-   Cz = coeffVec(3)
+   Cx = coeffVec(1)   ! Cxp  and  cn
+   Cy = -coeffVec(2)  ! -Cyp      ct
+   Cz = coeffVec(3)   ! Czp
    
    ! Put moment coefficients into the rotor reference frame
    coeffVec = Cm * afRadialVec
@@ -369,7 +379,7 @@ subroutine Transform_ClCdCm_to_CxCyCzCmxCmyCmz( phi, theta, cant,toeAngle ,useAI
 end subroutine Transform_ClCdCm_to_CxCyCzCmxCmyCmz
 !----------------------------------------------------------------------------------------------------------------------------------
 !>This is the residual calculation for the uncoupled BEM solve
-real(ReKi) function BEMTU_InductionWithResidual(p, u, i, j, phi, AFInfo, IsValidSolution, ErrStat, ErrMsg, a, ap, k, kp, Cx_out, Cy_out ) result (ResidualVal)
+real(ReKi) function BEMTU_InductionWithResidual(p, u, i, j, phi, AFInfo, IsValidSolution, ErrStat, ErrMsg, a, ap, k_out, kp_out, F_out, Cx_out, Cy_out ) result (ResidualVal)
       
 
    type(BEMT_ParameterType),intent(in   ) :: p                  !< parameters
@@ -384,8 +394,9 @@ real(ReKi) function BEMTU_InductionWithResidual(p, u, i, j, phi, AFInfo, IsValid
    character(*),           intent(  out) :: ErrMsg        ! Error message if ErrStat /= ErrID_None
    real(ReKi), optional,   intent(  out) :: a         ! computed axial induction
    real(ReKi), optional,   intent(  out) :: ap        ! computed tangential induction
-   real(ReKi), optional,   intent(  out) :: k         ! k in the induction factors routine
-   real(ReKi), optional,   intent(  out) :: kp        ! kp in the induction factors routine
+   real(ReKi), optional,   intent(  out) :: k_out     ! k in the induction factors routine
+   real(ReKi), optional,   intent(  out) :: kp_out    ! kp in the induction factors routine
+   real(ReKi), optional,   intent(  out) :: F_out     ! Tip/hub loss factor
 
   
    ! Local variables
@@ -398,11 +409,13 @@ real(ReKi) function BEMTU_InductionWithResidual(p, u, i, j, phi, AFInfo, IsValid
    real(ReKi)                            :: axInduction
    real(ReKi)                            :: tanInduction
 
-   real(ReKi)                            :: F    ! tip/hub loss factor
+   real(ReKi)                            :: F  !< tip/hub loss factor
    real(ReKi)                            :: Re
-   real(ReKi)                            :: Cx, Cy, Cz
+   real(ReKi)                            :: Cx !< Projected airfoil coefficient used in BET, cn
+   real(ReKi)                            :: Cy !< Projected airfoil coefficient used in BET, ct
+   real(ReKi)                            :: Cz
    real(ReKi), optional,   intent(  out) :: Cx_out, Cy_out
-   real(ReKi)                            :: dumX,dumY,dumZ, k_out, kp_out
+   real(ReKi)                            :: dumX,dumY,dumZ, k, kp
    TYPE(AFI_OutputType)                  :: AFI_interp
    
    ErrStat = ErrID_None
@@ -410,8 +423,8 @@ real(ReKi) function BEMTU_InductionWithResidual(p, u, i, j, phi, AFInfo, IsValid
    ResidualVal = 0.0_ReKi
    IsValidSolution = .true.
    
-   k_out = 0
-   kp_out = 0
+   k = 0
+   kp = 0
    
    ! make these return values consistent with what is returned in inductionFactors routine:
       ! Set the local version of the induction factors
@@ -436,6 +449,8 @@ real(ReKi) function BEMTU_InductionWithResidual(p, u, i, j, phi, AFInfo, IsValid
          if (ErrStat >= AbortErrLev) return
       
       ! Compute Cx, Cy given Cl, Cd and phi, we honor the useAIDrag and useTIDrag flag because Cx,Cy are only used for the solution of inductions
+      !    BEMMod_2D: Cx = Cxw       and  Cy = - Cyw
+      !    BEMMod_3D: Cx = cn = Cxp  and  Cy = ct =-Cyp
       if(p%BEM_Mod==BEMMod_2D) then
           call Transform_ClCd_to_CxCy( phi, p%useAIDrag, p%useTIDrag, AFI_interp%Cl, AFI_interp%Cd, Cx, Cy )  
       else
@@ -455,10 +470,10 @@ real(ReKi) function BEMTU_InductionWithResidual(p, u, i, j, phi, AFInfo, IsValid
          ! Determine axInduction, tanInduction for the current Cl, Cd, phi
       if(p%BEM_Mod==BEMMod_2D) then
           call inductionFactors0(p%numBlades, u%rlocal(i,j), p%chord(i,j), phi, Cx, Cy, u%Vx(i,j), u%Vy(i,j), F, p%useTanInd, &
-                              ResidualVal, axInduction, tanInduction, IsValidSolution)
+                              ResidualVal, axInduction, tanInduction, IsValidSolution, k, kp)
       else
           call inductionFactors2(p%BEM_Mod, p%numBlades, u%rlocal(i,j), p%chord(i,j), phi, Cx, Cy, u%Vx(i,j), u%Vy(i,j), u%drdz(i,j), u%cantAngle(i,j), F, u%CHI0, p%useTanInd, &
-                              ResidualVal, axInduction, tanInduction, p%MomentumCorr, u%xVelCorr(i,j), IsValidSolution, k_out, kp_out )
+                              ResidualVal, axInduction, tanInduction, p%MomentumCorr, u%xVelCorr(i,j), IsValidSolution, k, kp )
 
       endif
       
@@ -466,10 +481,11 @@ real(ReKi) function BEMTU_InductionWithResidual(p, u, i, j, phi, AFInfo, IsValid
       
    if (present(a )) a  = axInduction
    if (present(ap)) ap = tanInduction
-   if (present(k )) k  = k_out
-   if (present(kp)) kp = kp_out
+   if (present(k_out )) k_out  = k
+   if (present(kp_out)) kp_out = kp
    if (present(Cx_out)) Cx_out = Cx
    if (present(Cy_out)) Cy_out = Cy
+   if (present(F_out))  F_out = F
    
 end function BEMTU_InductionWithResidual
 !-----------------------------------------------------------------------------------------
@@ -701,7 +717,7 @@ end subroutine ApplySkewedWakeCorrection
 !-----------------------------------------------------------------------------------------
 !> This subroutine computes the induction factors (a) and (ap) along with the residual (fzero)
 subroutine inductionFactors0(B, r, chord, phi, cn, ct, Vx, Vy, F, wakerotation, &
-                              fzero, a_out, ap_out, IsValidSolution)
+                              fzero, a_out, ap_out, IsValidSolution, k_out, kp_out)
 
    implicit none
 
@@ -722,6 +738,8 @@ subroutine inductionFactors0(B, r, chord, phi, cn, ct, Vx, Vy, F, wakerotation, 
    real(ReKi), intent(out) :: a_out         !< axial induction [y%axInduction]
    real(ReKi), intent(out) :: ap_out        !< tangential induction, i.e., a-prime [y%tanInduction]
    logical,    intent(out) :: IsValidSolution !< this is set to false if k<=1 in the propeller brake region or k<-1 in the momentum region, indicating an invalid solution
+   real(ReKi), intent(out) :: k_out
+   real(ReKi), intent(out) :: kp_out
    
    ! local
         
