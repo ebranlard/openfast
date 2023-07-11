@@ -1103,8 +1103,8 @@ end subroutine inductionFactors2
 real(R8Ki) function ac_val(chi)
    implicit none
    real(R8Ki), intent(in) :: chi
-   ac_val = 0.35/cos(chi) ! See e.g. Spera
-   !ac_val = 0.5*cos(45.0*D2R)/cos(chi)
+   !ac_val = 0.35/cos(chi) ! See e.g. Spera
+   ac_val = 0.5*cos(45.0*D2R)/cos(chi)
    ! NOTE: since we use continuation at a=1, we want ac_val to remain far away from 1, so we clip it
    ac_val = min( ac_val, 0.5_R8Ki )   
 end function ac_val
@@ -1311,16 +1311,16 @@ subroutine getEmpiricalCoefficients( chi0, F, c0, c1, c2, skewConvention )
        s_c  = 4._R8Ki*F*(1._R8Ki-3*ac+2._R8Ki*ac**2+tanchi2)/sqrt( (1-ac)**2 + tanchi2 )  ! dCT/da(ac) (slope)
        ! Note: model below may change
        ! Note that it's not linear wrt F!
-       !CT_1 = max( 1.0_R8Ki, sqrt(((-0.64755/(cos(chi0)*cos(chi0)) - 0.8509/cos(chi0) + 3.4984)*F)**2 + 16*tanchi2))  ! CT(1)
-       CT_1 =  2.0_R8Ki + 2.113_R8Ki*tanchi2**0.7635  ! CT(1)
-       CT_1 =  max(CT_1, CT_c + s_c * (1._R8Ki-ac) + 0.001_R8Ki ) ! Make sure c2>0  
+       CT_1 = max( 1.0_R8Ki, sqrt(((-0.64755/(cos(chi0)*cos(chi0)) - 0.8509/cos(chi0) + 3.4984)*F)**2 + 16*tanchi2))  ! CT(1)
+       !CT_1 =  2.0_R8Ki + 2.113_R8Ki*tanchi2**0.7635  ! CT(1)
+       !CT_1 =  max(CT_1, CT_c + s_c * (1._R8Ki-ac) + 0.001_R8Ki ) ! Make sure c2>0  
    else
        ! Continuation of Glauert Momentum    CT= 4 a F (1-a)
        CT_c = 4._R8Ki*F*ac * (1._R8Ki-ac)                                                     ! CT(ac)
        s_c  = 4._R8Ki*F*(1._R8Ki-2._R8Ki*ac)                                                  ! dCT/da(ac) (slope)
        ! Note: model below may change
-       !CT_1 = max( 1.0_R8Ki, (-0.64755/(cos(chi0)*cos(chi0)) - 0.8509/cos(chi0) + 3.4984)*F )! CT(1)
-       CT_1 =  2.0_R8Ki   ! CT(1)
+       CT_1 = max( 1.0_R8Ki, (-0.64755/(cos(chi0)*cos(chi0)) - 0.8509/cos(chi0) + 3.4984)*F )! CT(1)
+       !CT_1 =  2.0_R8Ki   ! CT(1)
 
    endif
     call secondOrderCoeffC1(ac, s_c, CT_c, CT_1, c0, c1, c2)
