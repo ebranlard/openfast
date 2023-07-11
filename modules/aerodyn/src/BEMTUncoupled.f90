@@ -62,23 +62,16 @@ module BEMTUnCoupled
    
    public :: VelocityIsZero
 
-
    public :: BEMTU_Test_ACT_Relationship
 contains
    
 !..................................................................................................................................   
    function VelocityIsZero ( v )
-
-      ! passed variables
-
    REAL(ReKi), INTENT(IN )         :: v                                 !< the velocity that needs to be compared with zero
-
    LOGICAL                         :: VelocityIsZero                    !< .true. if and only if the velocity is (almost) equal to zero
-
-   
       
       VelocityIsZero = abs(v) < 0.001_ReKi ! tolerance in m/s for what we consider zero velocity for BEM computations
-   
+
    end function VelocityIsZero
 !..................................................................................................................................   
    
@@ -533,11 +526,6 @@ subroutine BEMTU_InductionIterative(p, u, i, j, a, ap, AFInfo, ErrStat, ErrMsg)
    kp = 0
    relaxation=0.3
 
-   ! HACK
-   !a  = 0.3
-   !ap = 0.02
-
-
    if ( p%FixedInductions(i,j) ) then
       ! We are simply going to bail if we are using tiploss and tipLossConst = 0 or using hubloss and hubLossConst=0, regardless of phi! [do this before checking if Vx or Vy is zero or you'll get jumps in the induction and loads]
       a  =  1.0_ReKi
@@ -585,26 +573,12 @@ subroutine BEMTU_InductionIterative(p, u, i, j, a, ap, AFInfo, ErrStat, ErrMsg)
          !kp = sigma_p*ct/(4.0_R8Ki*F)*Vrel2_a/(Vrel_p(1)*Vrel_p(2)) /u%drdz(i,j)
          !a_new  = k /(1._ReKi+k)
          !ap_new = kp/(1._ReKi-kp)
+         !call axialInductionFromGlauertMomentum(u%CHI0, phi, k, F, a, H) 
+         !a = sign(a,k)
          ! --- Method 2 (relying on existing function, but requires some exotic manipulation of kCorrectionFactor and kpCorrectionFactor
          ! TODO high thrust corrections
          call inductionFactors2(p%BEM_Mod, p%numBlades, u%rlocal(i,j), p%chord(i,j), phi, Cx, Cy, u%Vx(i,j), u%Vy(i,j), u%drdz(i,j), u%cantAngle(i,j), F, u%CHI0, p%useTanInd, &
                                  ResidualVal, a_new, ap_new, p%MomentumCorr, u%xVelCorr(i,j), IsValidSolution, k, kp, Vrel2_a, Vrel_p(1), Vrel_p(2) )
-         !if (j==1 .and. i==20) then
-         !   print*,''
-         !   print*,'Vx     ',u%Vx(i,j), u%Vy(i,j)
-         !   print*,'F      ',F
-         !   print*,'phi    ',phi
-         !   print*,'sigma  ',sigma_p
-         !   print*,'Vrel_p ',Vrel_p
-         !   print*,'Vrel_a ',Vrel_a
-         !   print*,'cn     ',cn, ct
-         !   print*,'k      ',k, kp
-         !   print*,'drdz   ',u%drdz(i,j)
-         !   print*,'a new  ',a_new, ap_new
-         !endif
-         !if (iIter>=1) then
-         !   exit
-         !endif
 
          if ((abs(a-a_new)<p%aTol) .and. (abs(ap-ap_new)<p%aTol)) then
             a  = a_new
@@ -676,14 +650,12 @@ subroutine ApplySkewedWakeCorrection(BEM_Mod, SkewMod, yawCorrFactor, F, azimuth
    
    
    ! Skewed wake correction
-   IF (.true.) then
-      if(BEM_Mod==BEMMod_2D) then
-         chi = (0.6_ReKi*a + 1.0_ReKi)*chi0
-      else
-         chi = (0.6_ReKi*a + 1.0_ReKi)*abs(chi0)
-      endif
-   END IF
-      
+    if(BEM_Mod==BEMMod_2D) then
+       chi = (0.6_ReKi*a + 1.0_ReKi)*chi0
+    else
+       chi = (0.6_ReKi*a + 1.0_ReKi)*abs(chi0)
+    endif
+         
    call MPi2Pi( chi ) ! make sure chi is in [-pi, pi] before testing if it's outside a valid range
       
    if (abs(chi) > piBy2) then
@@ -962,7 +934,7 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
    
    
    real(R8Ki)            :: k0
-   real(R8Ki)            :: a0_local
+   real(R8Ki)            :: ac             !< Critical axial induction factor value above which the high thrust correction is used
    real(R8Ki)            :: H              ! scaling factor to gradually phase out tangential induction when axial induction is near 1.0
    real(R8Ki)            :: fzero, a, ap   ! double precision versions of output variables of similar name
    
@@ -1029,10 +1001,8 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
    endif
 
 
-   !k = sign( k, real(phi,R8Ki) )
-   !k0 = ac_val(effectiveYaw) / (1.0-ac_val(effectiveYaw))
-   a0_local = ac_val(effectiveYaw)
-   k0 = a0_local / (1.0_R8Ki-a0_local)
+   ac = ac_val(effectiveYaw)
+   k0 = ac / (1.0_R8Ki-ac)
    if (BEM_Mod==BEMMod_3D_Manu) then
 
       call axialInductionFromGlauertMomentum(effectiveYaw, phi, k, F, a, H) 
@@ -1051,7 +1021,7 @@ subroutine inductionFactors2( BEM_Mod, B, r, chord, phi, cn, ct, Vx, Vy, drdz,ca
            call axialInductionFromEmpiricalThrust( effectiveYaw, phi, k, F, a, H, skewConvention=MomentumCorr, quarticVersion=MomentumCorr )
        endif
    else       
-      ! --- Momentum Corr
+      ! --- Using convention of axial induction where "a" is "an" (Wn = -an Un)
       call axialInductionFromGlauertMomentum(effectiveYaw, phi, k, F, a, H)
       a = sign(a,k)
    endif

@@ -318,7 +318,7 @@ IMPLICIT NONE
     REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: My      !< pitching moment per unit length of the jth node in the kth blade  (in y direction) [Nm/m]
     REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: Mz      !< pitching moment per unit length of the jth node in the kth blade  (in z direction) [Nm/m]
     REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: Vind_i      !< Induced velocities at jth node and kth blade (3xnSpanxnB) [m/s]
-    REAL(ReKi) , DIMENSION(1:3)  :: V_DiskAvg      !< disk-average relative wind speed (using disturbed wind, envision uses undisturbed wind) [m/s]
+    REAL(ReKi) , DIMENSION(1:3)  :: V_DiskAvg      !< disk-average relative wind speed [m/s]
     REAL(ReKi)  :: yaw      !< Yaw calculated in  SetInputsForBEMT [rad]
     REAL(ReKi)  :: tilt      !< tilt calculated in  SetInputsForBEMT [rad]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: hub_theta_x_root      !< angles saved for FAST.Farm [rad]

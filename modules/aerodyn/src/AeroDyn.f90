@@ -2572,13 +2572,23 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
 
    ! Calculate Yaw and Tilt for use in xVelCorr
    ! Define a vector wrt which the yaw is defined 
-   x_hat_wind = m%V_diskAvg/twonorm(m%V_diskAvg)
+   denom = twonorm(m%V_diskAvg)
+   if (EqualRealNos(denom, 0.0_ReKi)) then
+      x_hat_wind = 0.0_ReKi
+   else
+      x_hat_wind = m%V_diskAvg/denom
+   end if
    ! Yaw
    tmpD = x_hat_disk 
    tmpD(3) = 0.0
    tmpW = x_hat_wind
    tmpW(3) = 0.0
-   yaw  = acos(max(-1.0_ReKi,min(1.0_ReKi,dot_product(tmpD,tmpW)/(twonorm(tmpD)*TwoNorm(tmpW)))))
+   denom = TwoNorm(tmpD)*TwoNorm(tmpW)
+   if (EqualRealNos(denom, 0.0_ReKi)) then
+      yaw = 0.0_ReKi
+   else
+      yaw  = acos(max(-1.0_ReKi,min(1.0_ReKi,dot_product(tmpD,tmpW)/denom)))
+   end if   
    tmp_skewVec = cross_product(tmpW,tmpD);
    yaw = sign(yaw,tmp_skewVec(3))
    m%Yaw = yaw
@@ -2588,7 +2598,13 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
    tmpD(2) = 0.0 
    tmpW = x_hat_wind
    tmpW(2) = 0.0
-   tilt  = acos(max(-1.0_ReKi,min(1.0_ReKi,dot_product(tmpD,tmpW)/(twonorm(tmpD)*TwoNorm(tmpW))))) 
+   denom = TwoNorm(tmpD)*TwoNorm(tmpW)
+   if (EqualRealNos(denom, 0.0_Reki)) then
+      tilt = 0.0_ReKi
+   else
+      tilt  = acos(max(-1.0_ReKi,min(1.0_ReKi,dot_product(tmpD,tmpW)/denom)))
+   end if
+   
    tmp_skewVec = cross_product(tmpW,tmpD)
    tilt = sign(tilt,tmp_skewVec(2))
    m%tilt = tilt
@@ -2627,7 +2643,7 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
    !..........................
    if (p%AeroProjMod==APM_BEM_NoSweepPitchTwist .or. p%AeroProjMod==APM_LiftingLine) then
 
-      m%BEMT_u(indx)%psi = Azimuth
+      m%BEMT_u(indx)%psi_s = Azimuth
    elseif (p%AeroProjMod==APM_BEM_Polar) then
 
       do k=1,p%NumBlades
@@ -2637,7 +2653,7 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
          ! Extract azimuth angle for blade k
          ! NOTE: EB, this might need improvements (express wrt hub, also deal with case hubRad=0). This is likely not psi_skew. 
          theta = -EulerExtract( transpose(orientationBladeAzimuth(:,:,1)) )
-         m%BEMT_u(indx)%psi(k) = theta(1)
+         m%BEMT_u(indx)%psi_s(k) = theta(1)
       end do !k=blades
          
       ! Find the most-downwind azimuth angle needed by the skewed wake correction model
@@ -2713,7 +2729,12 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
             dr(:) = elemPosRotorProj(:,j) - elemPosRotorProj(:,j-1)
             dz(:) =  elemPosRelToHub(:,j) -  elemPosRelToHub(:,j-1)
             
-            m%BEMT_u(indx)%drdz(j,k) = TwoNorm(dr(:)) / TwoNorm(dz(:))
+            denom = TwoNorm(dz(:))
+            if (EqualRealNos(denom,0.0_ReKi)) then ! this should not happen, but we'll check anyway
+               m%BEMT_u(indx)%drdz(j,k) = 0.0_ReKi
+            else
+               m%BEMT_u(indx)%drdz(j,k) = TwoNorm(dr(:)) / denom
+            end if
          end do ! j
          m%BEMT_u(indx)%drdz(1,k) = m%BEMT_u(indx)%drdz(2,k)
       end do !k=blades
@@ -2770,11 +2791,9 @@ subroutine SetInputsForBEMT(p, u, m, indx, errStat, errMsg)
          m%BEMT_u(indx)%Vz(j,k) = dot_product( tmp, m%orientationAnnulus(3,:,j,k) ) ! radial component (tangential to the plane, not chord) of the inflow velocity of the jth node in the kth blade
 
          ! NOTE: We'll likely remove that:
-        !m%BEMT_u(indx)%xVelCorr(j,k) = TwoNorm(m%DisturbedInflow(:,j,k))*(             sin(yaw)*sin(-m%BEMT_u(indx)%cantAngle(j,k))*sin(m%BEMT_u(indx)%psi(k)) &
-!                                                                            + sin(tilt)*cos(yaw)*sin(-m%BEMT_u(indx)%cantAngle(j,k))*cos(m%BEMT_u(indx)%psi(k)) ) !m%BEMT_u(indx)%Vy(j,k)*sin(-theta(2))*sin(m%BEMT_u(indx)%psi(k))
-!
-         m%BEMT_u(indx)%xVelCorr(j,k) = 0.0_ReKi ! TODO
-                                               
+         !m%BEMT_u(indx)%xVelCorr(j,k) = TwoNorm(m%DisturbedInflow(:,j,k))*(             sin(yaw)*sin(-m%BEMT_u(indx)%cantAngle(j,k))*sin(m%BEMT_u(indx)%psi_s(k)) &
+         !                                                                         + sin(tilt)*cos(yaw)*sin(-m%BEMT_u(indx)%cantAngle(j,k))*cos(m%BEMT_u(indx)%psi_s(k)) ) !m%BEMT_u(indx)%Vy(j,k)*sin(-theta(2))*sin(m%BEMT_u(indx)%psi(k))
+         m%BEMT_u(indx)%xVelCorr(j,k) = 0.0_ReKi ! TODO                                    
       end do !j=nodes
    end do !k=blades
 
@@ -4358,7 +4377,7 @@ SUBROUTINE TFin_CalcOutput(p, p_AD, u, m, y, ErrStat, ErrMsg )
       force_tf(:)    = 0.0_ReKi
       moment_tf(:)    = 0.0_ReKi
       force_tf(1)    = Cx * q
-      force_tf(2)    = Cy * q * p%TFin%TFinChord
+      force_tf(2)    = Cy * q
       force_tf(3)    = 0.0_ReKi
       moment_tf(1:2) = 0.0_ReKi
       moment_tf(3)   = AFI_interp%Cm * q * p%TFin%TFinChord

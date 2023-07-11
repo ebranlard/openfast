@@ -379,7 +379,6 @@ CONTAINS
       REAL(R8Ki)                                   :: orient(3,3)
       REAL(R8Ki)                                   :: theta(3)
       REAL(ReKi)                                   :: Vind_s(3)  ! Induced velocity in "w" or "p" system
-      REAL(ReKi)                                   :: Vind_p(3)
       REAL(ReKi)                                   :: denom !, rmax
       REAL(ReKi)                                   :: ct, st ! cosine, sine of theta
       REAL(ReKi)                                   :: cp, sp ! cosine, sine of phi
@@ -400,7 +399,7 @@ CONTAINS
    
          ! blade outputs
       do k=1,min(p%numBlades,AD_MaxBl_Out)    ! limit this
-         m%AllOuts( BAzimuth(k) ) = MODULO( m%BEMT_u(indx)%psi(k)*R2D, 360.0_ReKi )
+         m%AllOuts( BAzimuth(k) ) = MODULO( m%BEMT_u(indx)%psi_s(k)*R2D, 360.0_ReKi )
        ! m%AllOuts( BPitch(  k) ) = calculated in SetInputsForBEMT
       
          do beta=1,p%NBlOuts
@@ -1014,6 +1013,10 @@ SUBROUTINE ParsePrimaryFileInfo( PriPath, InitInp, InputFile, RootName, NumBlade
 
    call ReadOutputListFromFileInfo( FileInfo_In, CurLine, InputFileData%BldNd_OutList, InputFileData%BldNd_NumOuts, ErrStat2, ErrMsg2, UnEc )
          if (FailedNodal()) return;
+
+!FIXME: improve logic on the node outputs
+   ! Prevent segfault when no blades specified.  All logic tests on BldNd_NumOuts at present.
+   if (InputFileData%BldNd_BladesOut <= 0)   InputFileData%BldNd_NumOuts = 0
 
    RETURN
 CONTAINS
