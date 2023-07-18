@@ -417,7 +417,8 @@ SUBROUTINE Calc_WriteAllBldNdOutput( p, p_AD, u, m, m_AD, x, y, OtherState, Indx
                do iB=1,nB 
                   iW = W2B(iB)
                   do iNd=1,nNd;
-                     y%WriteOutput(iOut)  = -m_AD%FVW%W(iW)%BN_UrelWind_s(1,iNd) * m_AD%FVW%W(iW)%BN_AxInd(iNd)
+                     y%WriteOutput(iOut)  = -m_AD%FVW%W(iW)%BN_UrelWind_s(1,iNd) * m%BN_AxInd(iNd,iB)
+                     !y%WriteOutput(iOut)  = -m_AD%FVW%W(iW)%BN_UrelWind_s(1,iNd) * m_AD%FVW%W(iW)%BN_AxInd(iNd)
                      iOut = iOut + 1 
                   enddo
                enddo
@@ -435,7 +436,8 @@ SUBROUTINE Calc_WriteAllBldNdOutput( p, p_AD, u, m, m_AD, x, y, OtherState, Indx
                DO iB=1,nB
                   iW = W2B(iB)
                   DO iNd=1,nNd 
-                     y%WriteOutput(iOut)  =  m_AD%FVW%W(iW)%BN_UrelWind_s(2,iNd) * m_AD%FVW%W(iW)%BN_TanInd(iNd)
+                     y%WriteOutput(iOut)  =  m_AD%FVW%W(iW)%BN_UrelWind_s(2,iNd) * m%BN_TnInd(iNd,iB)
+                     !y%WriteOutput(iOut)  =  m_AD%FVW%W(iW)%BN_UrelWind_s(2,iNd) * m_AD%FVW%W(iW)%BN_TanInd(iNd)
                      iOut = iOut + 1
                   END DO
                END DO
@@ -549,7 +551,8 @@ SUBROUTINE Calc_WriteAllBldNdOutput( p, p_AD, u, m, m_AD, x, y, OtherState, Indx
                DO iB=1,nB
                   iW = W2B(iB)
                   DO iNd=1,nNd
-                     y%WriteOutput(iOut)  = m_AD%FVW%W(iW)%BN_AxInd(iNd)
+                     y%WriteOutput(iOut)  = m%BN_AxInd(iNd,iB)
+                     !y%WriteOutput(iOut)  = m_AD%FVW%W(iW)%BN_AxInd(iNd)
                      iOut = iOut + 1
                   END DO
                END DO
@@ -567,7 +570,8 @@ SUBROUTINE Calc_WriteAllBldNdOutput( p, p_AD, u, m, m_AD, x, y, OtherState, Indx
                DO iB=1,nB
                   iW = W2B(iB)
                   DO iNd=1,nNd                   
-                     y%WriteOutput(iOut)  = m_AD%FVW%W(iW)%BN_TanInd(iNd)
+                     y%WriteOutput(iOut)  = m%BN_TnInd(iNd,iB)
+                     !y%WriteOutput(iOut)  = m_AD%FVW%W(iW)%BN_TanInd(iNd)
                      iOut = iOut + 1
                   END DO
                END DO

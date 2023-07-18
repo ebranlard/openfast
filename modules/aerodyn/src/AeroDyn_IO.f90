@@ -496,11 +496,15 @@ CONTAINS
             m%AllOuts( BNRe(   beta,k) ) = m_AD%FVW%W(iW)%BN_Re(j)  / 1.0E6
             m%AllOuts( BNM(    beta,k) ) = m_AD%FVW%W(iW)%BN_Vrel(j) / p%SpdSound
 
-            m%AllOuts( BNVIndx(beta,k) ) = -m_AD%FVW%W(iW)%BN_UrelWind_s(1,j) * m_AD%FVW%W(iW)%BN_AxInd(j)
-            m%AllOuts( BNVIndy(beta,k) ) =  m_AD%FVW%W(iW)%BN_UrelWind_s(2,j) * m_AD%FVW%W(iW)%BN_TanInd(j)
+            !m%AllOuts( BNVIndx(beta,k) ) = -m_AD%FVW%W(iW)%BN_UrelWind_s(1,j) * m_AD%FVW%W(iW)%BN_AxInd(j)
+            !m%AllOuts( BNVIndy(beta,k) ) =  m_AD%FVW%W(iW)%BN_UrelWind_s(2,j) * m_AD%FVW%W(iW)%BN_TanInd(j)
+            m%AllOuts( BNVIndx(beta,k) ) = -m_AD%FVW%W(iW)%BN_UrelWind_s(1,j) * m%BN_AxInd(j,k)
+            m%AllOuts( BNVIndy(beta,k) ) =  m_AD%FVW%W(iW)%BN_UrelWind_s(2,j) * m%BN_TnInd(j,k)
 
-            m%AllOuts( BNAxInd(beta,k) ) = m_AD%FVW%W(iW)%BN_AxInd(j)
-            m%AllOuts( BNTnInd(beta,k) ) = m_AD%FVW%W(iW)%BN_TanInd(j)
+            !m%AllOuts( BNAxInd(beta,k) ) = m_AD%FVW%W(iW)%BN_AxInd(j)
+            !m%AllOuts( BNTnInd(beta,k) ) = m_AD%FVW%W(iW)%BN_TanInd(j)
+            m%AllOuts( BNAxInd(beta,k) ) = m%BN_AxInd(j,k)
+            m%AllOuts( BNTnInd(beta,k) ) = m%BN_TnInd(j,k)
 
             m%AllOuts( BNAlpha(beta,k) ) = m_AD%FVW%W(iW)%BN_alpha(j)*R2D
             m%AllOuts( BNTheta(beta,k) ) = m_AD%FVW%W(iW)%PitchAndTwist(j)*R2D

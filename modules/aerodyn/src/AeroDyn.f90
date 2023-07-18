@@ -455,7 +455,7 @@ subroutine AD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
       ! many states are in the BEMT module, which were initialized in BEMT_Init()
       
    do iR = 1, nRotors
-      call Init_MiscVars(m%rotors(iR), p%rotors(iR), u%rotors(iR), y%rotors(iR), errStat2, errMsg2)
+      call Init_MiscVars(m%rotors(iR), p%rotors(iR), u%rotors(iR), y%rotors(iR), p, errStat2, errMsg2)
       if (Failed()) return;
    enddo
       
@@ -583,11 +583,12 @@ subroutine AD_ReInit(p, x, xd, z, OtherState, m, Interval, ErrStat, ErrMsg )
 end subroutine AD_ReInit
 !----------------------------------------------------------------------------------------------------------------------------------   
 !> This routine initializes (allocates) the misc variables for use during the simulation.
-subroutine Init_MiscVars(m, p, u, y, errStat, errMsg)
+subroutine Init_MiscVars(m, p, u, y, p_AD, errStat, errMsg)
    type(RotMiscVarType),          intent(inout)  :: m                !< misc/optimization data (not defined in submodules)
    type(RotParameterType),        intent(in   )  :: p                !< Parameters
    type(RotInputType),            intent(inout)  :: u                !< input for HubMotion mesh (create sibling mesh here)
    type(RotOutputType),           intent(inout)  :: y                !< output (create mapping between output and otherstate mesh here)
+   type(AD_ParameterType),        intent(in   )  :: p_AD             !< Parameters
    integer(IntKi),                intent(  out)  :: errStat          !< Error status of the operation
    character(*),                  intent(  out)  :: errMsg           !< Error message if ErrStat /= ErrID_None
 
@@ -656,6 +657,28 @@ end if
       call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
    call AllocAry( m%Vind_i, 3, p%NumBlNds, p%NumBlades, 'm%Vind_i', ErrStat2, ErrMsg2 )
       call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
+   if(Failed()) return
+
+   ! Lifting line calculations for output (OLAF only for now)
+   if (p_AD%WakeMod == WakeMod_FVW) then
+      call AllocAry( m%BN_AxInd ,    p%NumBlNds , p%NumBlades, 'm%BN_AxInd ', ErrStat2, ErrMsg2 );call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName); m%BN_AxInd  = -999999_ReKi;
+      call AllocAry( m%BN_TnInd ,    p%NumBlNds , p%NumBlades, 'm%BN_TnInd' , ErrStat2, ErrMsg2 );call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName); m%BN_TnInd  = -999999_ReKi;
+      call AllocAry( m%BN_Vrel  ,    p%NumBlNds , p%NumBlades, 'm%BN_Vrel  ', ErrStat2, ErrMsg2 );call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName); m%BN_Vrel   = -999999_ReKi;
+      call AllocAry( m%BN_alpha ,    p%NumBlNds , p%NumBlades, 'm%BN_alpha ', ErrStat2, ErrMsg2 );call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName); m%BN_alpha  = -999999_ReKi;
+      call AllocAry( m%BN_phi   ,    p%NumBlNds , p%NumBlades, 'm%BN_phi   ', ErrStat2, ErrMsg2 );call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName); m%BN_phi    = -999999_ReKi;
+      call AllocAry( m%BN_Re    ,    p%NumBlNds , p%NumBlades, 'm%BN_Re    ', ErrStat2, ErrMsg2 );call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName); m%BN_Re     = -999999_ReKi;
+      call AllocAry( m%BN_Cl_qs ,    p%NumBlNds , p%NumBlades, 'm%BN_Cl_qs ', ErrStat2, ErrMsg2 );call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName); m%BN_Cl_qs  = -999999_ReKi;
+      call AllocAry( m%BN_Cd_qs ,    p%NumBlNds , p%NumBlades, 'm%BN_Cd_qs ', ErrStat2, ErrMsg2 );call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName); m%BN_Cd_qs  = -999999_ReKi;
+      call AllocAry( m%BN_Cm_qs ,    p%NumBlNds , p%NumBlades, 'm%BN_Cm_qs ', ErrStat2, ErrMsg2 );call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName); m%BN_Cm_qs  = -999999_ReKi;
+      call AllocAry( m%BN_Cpmin ,    p%NumBlNds , p%NumBlades, 'm%BN_Cpmin ', ErrStat2, ErrMsg2 );call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName); m%BN_Cpmin  = -999999_ReKi;
+      call AllocAry( m%BN_Cl    ,    p%NumBlNds , p%NumBlades, 'm%BN_Cl    ', ErrStat2, ErrMsg2 );call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName); m%BN_Cl     = -999999_ReKi;
+      call AllocAry( m%BN_Cd    ,    p%NumBlNds , p%NumBlades, 'm%BN_Cd    ', ErrStat2, ErrMsg2 );call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName); m%BN_Cd     = -999999_ReKi;
+      call AllocAry( m%BN_Cm    ,    p%NumBlNds , p%NumBlades, 'm%BN_Cm    ', ErrStat2, ErrMsg2 );call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName); m%BN_Cm     = -999999_ReKi;
+      call AllocAry( m%BN_Cx    ,    p%NumBlNds , p%NumBlades, 'm%BN_Cx    ', ErrStat2, ErrMsg2 );call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName); m%BN_Cx     = -999999_ReKi;
+      call AllocAry( m%BN_Cy    ,    p%NumBlNds , p%NumBlades, 'm%BN_Cy    ', ErrStat2, ErrMsg2 );call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName); m%BN_Cy     = -999999_ReKi;
+      if(Failed()) return
+   endif
+
       ! mesh mapping data for integrating load over entire rotor:
    allocate( m%B_L_2_H_P(p%NumBlades), Stat = ErrStat2)
       if (ErrStat2 /= 0) then
@@ -871,6 +894,11 @@ end if
    
    m%FirstWarn_TowerStrike = .true.
    
+contains
+   logical function Failed()
+        call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName) 
+        Failed =  ErrStat >= AbortErrLev
+   end function Failed
 end subroutine Init_MiscVars
 !----------------------------------------------------------------------------------------------------------------------------------   
 !> This routine initializes (allocates) the misc variables for use during the simulation.
@@ -1995,8 +2023,8 @@ subroutine CalcBuoyantLoads( u, p, m, y, ErrStat, ErrMsg )
    REAL(ReKi), DIMENSION(3)                         :: BlmomentTip      !< Buoyant moment on element tip in global coordinates
    REAL(ReKi), DIMENSION(3)                         :: TwrforceBtop     !< Buoyant force on tower top in global coordinates
    REAL(ReKi), DIMENSION(3)                         :: TwrmomentBtop    !< Buoyant moment on tower top in global coordinates
-   REAL(ReKi), DIMENSION(p%NumBlNds,p%NumBlades,3)  :: BlFBtmp          !< Buoyant force at blade nodes in global coordinates
-   REAL(ReKi), DIMENSION(p%NumBlNds,p%NumBlades,3)  :: BlMBtmp          !< Buoyant moment at blade nodes in global coordinates
+   REAL(ReKi), DIMENSION(p%NumBlNds,p%NumBlades,3)  :: BlFBtmp          !< Buoyant force at blade nodes in global coordinates ! TODO REVERSE MEMORY ORDER
+   REAL(ReKi), DIMENSION(p%NumBlNds,p%NumBlades,3)  :: BlMBtmp          !< Buoyant moment at blade nodes in global coordinates ! TODO REVERSE MEMORY ORDER
    REAL(ReKi), DIMENSION(p%NumTwrNds,3)             :: TwrFBtmp         !< Buoyant force at tower nodes in global coordinates
    REAL(ReKi), DIMENSION(p%NumTwrNds,3)             :: TwrMBtmp         !< Buoyant moment at tower nodes in global coordinates
    REAL(ReKi), DIMENSION(3)                         :: HubFBtmp         !< Buoyant force at hub node in global coordinates, passed to m%HubFB
@@ -3408,8 +3436,11 @@ subroutine SetOutputsFromFVW(t, u, p, OtherState, x, xd, m, y, ErrStat, ErrMsg)
             y%rotors(iR)%BladeLoad(k)%Moment(:,j) = matmul( moment, m%rotors(iR)%orientationAnnulus(:,:,j,k) )  ! moment per unit length of the jth node in the kth blade
 
             ! Save results for outputs so we don't have to recalculate them all when we write outputs
-            m%FVW%W(iW)%BN_AxInd(j)           = AxInd
-            m%FVW%W(iW)%BN_TanInd(j)          = TanInd
+            m%rotors(iR)%BN_AxInd(j,k)        = AxInd
+            m%rotors(iR)%BN_TnInd(j,k)        = TanInd
+            m%rotors(iR)%BN_Vrel(j,k)         = Vrel
+!             m%FVW%W(iW)%BN_AxInd(j)           = AxInd
+!             m%FVW%W(iW)%BN_TanInd(j)          = TanInd
             m%FVW%W(iW)%BN_Vrel(j)            = Vrel
             m%FVW%W(iW)%BN_alpha(j)           = alpha
             m%FVW%W(iW)%BN_phi(j)             = phi
