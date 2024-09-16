@@ -462,6 +462,11 @@ CONTAINS
 !     m%AllOuts( RtTSR    ) = m%BEMT_u(indx)%TSR
       m%AllOuts( DBEMTau1 ) = OtherState%BEMT%DBEMT%tau1
 
+      ! Debug
+      m%AllOuts( zDebug1   ) = m%BEMT_u(indx)%psiSkewOffset*R2D
+      m%AllOuts( zDebug2   ) = m%psi_s(1)*R2D
+      m%AllOuts( zDebug3   ) = m%psi_s(2)*R2D
+      m%AllOuts( zDebug4   ) = m%psi_s(3)*R2D
       
    end subroutine Calc_WriteOutput_BEMT
 

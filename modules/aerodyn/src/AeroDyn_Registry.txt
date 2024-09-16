@@ -329,6 +329,7 @@ typedef	^	RotMiscVarType	MeshMapType	T_P_2_T_L	-	-	-	"mapping data structure to 
 typedef	^	RotMiscVarType	Logical	FirstWarn_TowerStrike	-	-	-	"flag to avoid printing tower strike multiple times" -
 typedef	^	RotMiscVarType	ReKi	AvgDiskVel	{3}	-	-	"disk-averaged U,V,W (undisturbed)"	m/s
 typedef	^	RotMiscVarType	ReKi	AvgDiskVelDist	{3}	-	-	"disk-averaged U,V,W (disturbed)"	m/s
+typedef	^	RotMiscVarType	ReKi	psi_s 	{3}	-	-	"Skew Azimuth of blades"	rad
 # TailFin
 typedef	^	RotMiscVarType	ReKi	TFinAlpha	-	-	-	"Angle of attack for tailfin"
 typedef	^	RotMiscVarType	ReKi	TFinRe   	-	-	-	"Reynolds number for tailfin"

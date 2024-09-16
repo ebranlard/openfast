@@ -367,6 +367,7 @@ IMPLICIT NONE
     LOGICAL  :: FirstWarn_TowerStrike = .false.      !< flag to avoid printing tower strike multiple times [-]
     REAL(ReKi) , DIMENSION(1:3)  :: AvgDiskVel = 0.0_ReKi      !< disk-averaged U,V,W (undisturbed) [m/s]
     REAL(ReKi) , DIMENSION(1:3)  :: AvgDiskVelDist = 0.0_ReKi      !< disk-averaged U,V,W (disturbed) [m/s]
+    REAL(ReKi) , DIMENSION(1:3)  :: psi_s = 0.0_ReKi      !< Skew Azimuth of blades [rad]
     REAL(ReKi)  :: TFinAlpha = 0.0_ReKi      !< Angle of attack for tailfin [-]
     REAL(ReKi)  :: TFinRe = 0.0_ReKi      !< Reynolds number for tailfin [-]
     REAL(ReKi)  :: TFinVrel = 0.0_ReKi      !< Orthogonal relative velocity nrom at the reference point [-]
@@ -3543,6 +3544,7 @@ subroutine AD_CopyRotMiscVarType(SrcRotMiscVarTypeData, DstRotMiscVarTypeData, C
    DstRotMiscVarTypeData%FirstWarn_TowerStrike = SrcRotMiscVarTypeData%FirstWarn_TowerStrike
    DstRotMiscVarTypeData%AvgDiskVel = SrcRotMiscVarTypeData%AvgDiskVel
    DstRotMiscVarTypeData%AvgDiskVelDist = SrcRotMiscVarTypeData%AvgDiskVelDist
+   DstRotMiscVarTypeData%psi_s = SrcRotMiscVarTypeData%psi_s
    DstRotMiscVarTypeData%TFinAlpha = SrcRotMiscVarTypeData%TFinAlpha
    DstRotMiscVarTypeData%TFinRe = SrcRotMiscVarTypeData%TFinRe
    DstRotMiscVarTypeData%TFinVrel = SrcRotMiscVarTypeData%TFinVrel
@@ -3843,6 +3845,7 @@ subroutine AD_PackRotMiscVarType(RF, Indata)
    call RegPack(RF, InData%FirstWarn_TowerStrike)
    call RegPack(RF, InData%AvgDiskVel)
    call RegPack(RF, InData%AvgDiskVelDist)
+   call RegPack(RF, InData%psi_s)
    call RegPack(RF, InData%TFinAlpha)
    call RegPack(RF, InData%TFinRe)
    call RegPack(RF, InData%TFinVrel)
@@ -3992,6 +3995,7 @@ subroutine AD_UnPackRotMiscVarType(RF, OutData)
    call RegUnpack(RF, OutData%FirstWarn_TowerStrike); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%AvgDiskVel); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%AvgDiskVelDist); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpack(RF, OutData%psi_s); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%TFinAlpha); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%TFinRe); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%TFinVrel); if (RegCheckErr(RF, RoutineName)) return

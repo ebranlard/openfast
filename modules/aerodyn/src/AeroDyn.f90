@@ -2993,6 +2993,7 @@ subroutine SetInputsForBEMT(p, p_AD, u, RotInflow, m, indx, errStat, errMsg)
 
       ! Get disk average values and orientations
    call DiskAvgValues(p, u, RotInflow, m, x_hat_disk, y_hat_disk, z_hat_disk, Azimuth) ! also sets m%V_diskAvg, m%V_dot_x
+   m%psi_s = Azimuth
 
    ! Velocity in disk normal
    m%BEMT_u(indx)%V0 = m%AvgDiskVelDist    ! Note: used for SkewWake Cont
@@ -3079,6 +3080,7 @@ subroutine SetInputsForBEMT(p, p_AD, u, RotInflow, m, indx, errStat, errMsg)
    if (p%AeroProjMod==APM_BEM_NoSweepPitchTwist .or. p%AeroProjMod==APM_LiftingLine) then
 
       m%BEMT_u(indx)%psi_s = Azimuth
+      m%BEMT_u(indx)%psiSkewOffset = 0.0_ReKi 
    elseif (p%AeroProjMod==APM_BEM_Polar) then
 
       do k=1,p%NumBlades
