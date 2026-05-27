@@ -40,6 +40,8 @@ IMPLICIT NONE
     INTEGER(IntKi), PUBLIC, PARAMETER  :: Mod_Wake_Polar                   = 1      ! Wake model [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: Mod_Wake_Curl                    = 2      ! Wake model [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: Mod_Wake_Cartesian               = 3      ! Wake model [-]
+    INTEGER(IntKi), PUBLIC, PARAMETER  :: NumScheme_FE                     = 1      ! Numerical scheme forward Euler [-]
+    INTEGER(IntKi), PUBLIC, PARAMETER  :: NumScheme_FD                     = 2      ! Numerical scheme finite differences [-]
 ! =========  WD_InputFileType  =======
   TYPE, PUBLIC :: WD_InputFileType
     REAL(ReKi)  :: dr = 0.0_ReKi      !< Radial increment of radial finite-difference grid [>0.0] [m]
@@ -47,6 +49,12 @@ IMPLICIT NONE
     REAL(ReKi)  :: NumDFull = 0.0_ReKi      !< Distance of full wake propagation as a multiple of RotorDiamRef [-]
     REAL(ReKi)  :: NumDBuff = 0.0_ReKi      !< Length of wake propagation buffer region as a multiple of RotorDiamRef [-]
     INTEGER(IntKi)  :: Mod_Wake = 0_IntKi      !< Switch between wake formulations 1=Polar, 2=Cartesian, 3=Curl [-]
+    INTEGER(IntKi)  :: NumScheme = 0_IntKi      !< Finite Difference (1) or Forward-Euler (2) [-]
+    LOGICAL  :: Cartesian = .false.      !< Cartesian or polar formulation [-]
+    LOGICAL  :: Swirl = .false.      !< Switch to add swirl (only for cartesian formulation) [-]
+    LOGICAL  :: Curl = .false.      !< Switch to add curl (only for cartesian formulation) [-]
+    LOGICAL  :: Continuity = .false.      !< Solve for continuity or not [-]
+    LOGICAL  :: ShearVeer = .false.      !< Account for Shear/Vear correction [-]
     REAL(ReKi)  :: f_c = 0.0_ReKi      !< Cut-off frequency of the low-pass time-filter for the wake advection, deflection, and meandering model [>0.0] [Hz]
     REAL(ReKi)  :: C_HWkDfl_O = 0.0_ReKi      !< Calibrated parameter in the correction for wake deflection defining the horizontal offset at the rotor [m]
     REAL(ReKi)  :: C_HWkDfl_OY = 0.0_ReKi      !< Calibrated parameter in the correction for wake deflection defining the horizontal offset at the rotor scaled with yaw error [m/rad]
@@ -65,7 +73,6 @@ IMPLICIT NONE
     REAL(ReKi)  :: C_vShr_Exp = 0.0_ReKi      !< Calibrated parameter in the eddy viscosity filter function for the shear layer defining the exponent in the exponential region [> 0.0] [-]
     INTEGER(IntKi)  :: Mod_WakeDiam = 0_IntKi      !< Wake diameter calculation model {1: rotor diameter, 2: velocity-based, 3: mass-flux based, 4: momentum-flux based} [DEFAULT=1] [-]
     REAL(ReKi)  :: C_WakeDiam = 0.0_ReKi      !< Calibrated parameter for wake diameter calculation [>0.0 and <1.0] [unused for Mod_WakeDiam=1] [-]
-    LOGICAL  :: Swirl = .false.      !< Switch to add swirl [only used if Mod_Wake=2 or 2] [-]
     REAL(ReKi)  :: k_VortexDecay = 0.0_ReKi      !< Vortex decay constant for curl [-]
     REAL(ReKi)  :: sigma_D = 0.0_ReKi      !< The width of the Gaussian vortices used for the curled wake model divided by diameter [-]
     INTEGER(IntKi)  :: NumVortices = 0_IntKi      !< The number of vortices used for the curled wake model [-]
@@ -179,7 +186,12 @@ IMPLICIT NONE
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: y      !< Horizontal discretization of each wake plane (size ny=2nr-1) [m]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: z      !< Nomically-vertical discretization of each wake plane (size nz=2nr-1) [m]
     INTEGER(IntKi)  :: Mod_Wake = 0_IntKi      !< Switch between wake formulations 1=Polar, 2=Curl, 3=Cartesian [-]
-    LOGICAL  :: Swirl = .false.      !< Switch to add swirl [only used if Mod_Wake=2 or 2] [-]
+    INTEGER(IntKi)  :: NumScheme = 0_IntKi      !< Finite Difference (1) or Forward-Euler (2) [-]
+    LOGICAL  :: Cartesian = .false.      !< Cartesian or polar formulation [-]
+    LOGICAL  :: Swirl = .false.      !< Switch to add swirl (only for cartesian formulation) [-]
+    LOGICAL  :: Curl = .false.      !< Switch to add curl (only for cartesian formulation) [-]
+    LOGICAL  :: Continuity = .false.      !< Solve for continuity or not [-]
+    LOGICAL  :: ShearVeer = .false.      !< Account for Shear/Vear correction [-]
     REAL(ReKi)  :: k_VortexDecay = 0.0_ReKi      !< Vortex decay constant for curl [-]
     REAL(ReKi)  :: sigma_D = 0.0_ReKi      !< The width of the Gaussian vortices used for the curled wake model divided by diameter [-]
     INTEGER(IntKi)  :: NumVortices = 0_IntKi      !< The number of vortices used for the curled wake model [-]
@@ -293,6 +305,12 @@ subroutine WD_CopyInputFileType(SrcInputFileTypeData, DstInputFileTypeData, Ctrl
    DstInputFileTypeData%NumDFull = SrcInputFileTypeData%NumDFull
    DstInputFileTypeData%NumDBuff = SrcInputFileTypeData%NumDBuff
    DstInputFileTypeData%Mod_Wake = SrcInputFileTypeData%Mod_Wake
+   DstInputFileTypeData%NumScheme = SrcInputFileTypeData%NumScheme
+   DstInputFileTypeData%Cartesian = SrcInputFileTypeData%Cartesian
+   DstInputFileTypeData%Swirl = SrcInputFileTypeData%Swirl
+   DstInputFileTypeData%Curl = SrcInputFileTypeData%Curl
+   DstInputFileTypeData%Continuity = SrcInputFileTypeData%Continuity
+   DstInputFileTypeData%ShearVeer = SrcInputFileTypeData%ShearVeer
    DstInputFileTypeData%f_c = SrcInputFileTypeData%f_c
    DstInputFileTypeData%C_HWkDfl_O = SrcInputFileTypeData%C_HWkDfl_O
    DstInputFileTypeData%C_HWkDfl_OY = SrcInputFileTypeData%C_HWkDfl_OY
@@ -311,7 +329,6 @@ subroutine WD_CopyInputFileType(SrcInputFileTypeData, DstInputFileTypeData, Ctrl
    DstInputFileTypeData%C_vShr_Exp = SrcInputFileTypeData%C_vShr_Exp
    DstInputFileTypeData%Mod_WakeDiam = SrcInputFileTypeData%Mod_WakeDiam
    DstInputFileTypeData%C_WakeDiam = SrcInputFileTypeData%C_WakeDiam
-   DstInputFileTypeData%Swirl = SrcInputFileTypeData%Swirl
    DstInputFileTypeData%k_VortexDecay = SrcInputFileTypeData%k_VortexDecay
    DstInputFileTypeData%sigma_D = SrcInputFileTypeData%sigma_D
    DstInputFileTypeData%NumVortices = SrcInputFileTypeData%NumVortices
@@ -351,6 +368,12 @@ subroutine WD_PackInputFileType(RF, Indata)
    call RegPack(RF, InData%NumDFull)
    call RegPack(RF, InData%NumDBuff)
    call RegPack(RF, InData%Mod_Wake)
+   call RegPack(RF, InData%NumScheme)
+   call RegPack(RF, InData%Cartesian)
+   call RegPack(RF, InData%Swirl)
+   call RegPack(RF, InData%Curl)
+   call RegPack(RF, InData%Continuity)
+   call RegPack(RF, InData%ShearVeer)
    call RegPack(RF, InData%f_c)
    call RegPack(RF, InData%C_HWkDfl_O)
    call RegPack(RF, InData%C_HWkDfl_OY)
@@ -369,7 +392,6 @@ subroutine WD_PackInputFileType(RF, Indata)
    call RegPack(RF, InData%C_vShr_Exp)
    call RegPack(RF, InData%Mod_WakeDiam)
    call RegPack(RF, InData%C_WakeDiam)
-   call RegPack(RF, InData%Swirl)
    call RegPack(RF, InData%k_VortexDecay)
    call RegPack(RF, InData%sigma_D)
    call RegPack(RF, InData%NumVortices)
@@ -401,6 +423,12 @@ subroutine WD_UnPackInputFileType(RF, OutData)
    call RegUnpack(RF, OutData%NumDFull); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%NumDBuff); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%Mod_Wake); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpack(RF, OutData%NumScheme); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpack(RF, OutData%Cartesian); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpack(RF, OutData%Swirl); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpack(RF, OutData%Curl); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpack(RF, OutData%Continuity); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpack(RF, OutData%ShearVeer); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%f_c); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%C_HWkDfl_O); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%C_HWkDfl_OY); if (RegCheckErr(RF, RoutineName)) return
@@ -419,7 +447,6 @@ subroutine WD_UnPackInputFileType(RF, OutData)
    call RegUnpack(RF, OutData%C_vShr_Exp); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%Mod_WakeDiam); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%C_WakeDiam); if (RegCheckErr(RF, RoutineName)) return
-   call RegUnpack(RF, OutData%Swirl); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%k_VortexDecay); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%sigma_D); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%NumVortices); if (RegCheckErr(RF, RoutineName)) return
@@ -1458,7 +1485,12 @@ subroutine WD_CopyParam(SrcParamData, DstParamData, CtrlCode, ErrStat, ErrMsg)
       DstParamData%z = SrcParamData%z
    end if
    DstParamData%Mod_Wake = SrcParamData%Mod_Wake
+   DstParamData%NumScheme = SrcParamData%NumScheme
+   DstParamData%Cartesian = SrcParamData%Cartesian
    DstParamData%Swirl = SrcParamData%Swirl
+   DstParamData%Curl = SrcParamData%Curl
+   DstParamData%Continuity = SrcParamData%Continuity
+   DstParamData%ShearVeer = SrcParamData%ShearVeer
    DstParamData%k_VortexDecay = SrcParamData%k_VortexDecay
    DstParamData%sigma_D = SrcParamData%sigma_D
    DstParamData%NumVortices = SrcParamData%NumVortices
@@ -1534,7 +1566,12 @@ subroutine WD_PackParam(RF, Indata)
    call RegPackAlloc(RF, InData%y)
    call RegPackAlloc(RF, InData%z)
    call RegPack(RF, InData%Mod_Wake)
+   call RegPack(RF, InData%NumScheme)
+   call RegPack(RF, InData%Cartesian)
    call RegPack(RF, InData%Swirl)
+   call RegPack(RF, InData%Curl)
+   call RegPack(RF, InData%Continuity)
+   call RegPack(RF, InData%ShearVeer)
    call RegPack(RF, InData%k_VortexDecay)
    call RegPack(RF, InData%sigma_D)
    call RegPack(RF, InData%NumVortices)
@@ -1596,7 +1633,12 @@ subroutine WD_UnPackParam(RF, OutData)
    call RegUnpackAlloc(RF, OutData%y); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpackAlloc(RF, OutData%z); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%Mod_Wake); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpack(RF, OutData%NumScheme); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpack(RF, OutData%Cartesian); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%Swirl); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpack(RF, OutData%Curl); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpack(RF, OutData%Continuity); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpack(RF, OutData%ShearVeer); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%k_VortexDecay); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%sigma_D); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%NumVortices); if (RegCheckErr(RF, RoutineName)) return

@@ -21,6 +21,8 @@ param ^                    -               INTEGER         WakeDiamMod_MtmFlux  
 param ^                    -               INTEGER         Mod_Wake_Polar          - 1 -  "Wake model" -
 param ^                    -               INTEGER         Mod_Wake_Curl           - 2 -  "Wake model" -
 param ^                    -               INTEGER         Mod_Wake_Cartesian      - 3 -  "Wake model" -
+param ^                    -               INTEGER         NumScheme_FE            - 1 -  "Numerical scheme forward Euler" -
+param ^                    -               INTEGER         NumScheme_FD            - 2 -  "Numerical scheme finite differences" -
 
 # ..... InputFile Data .......................................................................................................
 typedef  ^                 WD_InputFileType  ReKi            dr             - - -  "Radial increment of radial finite-difference grid [>0.0]" m
@@ -28,6 +30,12 @@ typedef  ^                 WD_InputFileType  IntKi           NumRadii       - - 
 typedef  ^                 WD_InputFileType  ReKi            NumDFull       - - -  "Distance of full wake propagation as a multiple of RotorDiamRef" -
 typedef  ^                 WD_InputFileType  ReKi            NumDBuff       - - -  "Length of wake propagation buffer region as a multiple of RotorDiamRef" -
 typedef  ^                 WD_InputFileType  IntKi           Mod_Wake       - - -  "Switch between wake formulations 1=Polar, 2=Cartesian, 3=Curl" -
+typedef  ^                 WD_InputFileType  IntKi           NumScheme      - - -  "Finite Difference (1) or Forward-Euler (2)" -
+typedef  ^                 WD_InputFileType  Logical         Cartesian      - - -  "Cartesian or polar formulation" -
+typedef  ^                 WD_InputFileType  Logical         Swirl          - - -  "Switch to add swirl (only for cartesian formulation)" -
+typedef  ^                 WD_InputFileType  Logical         Curl           - - -  "Switch to add curl (only for cartesian formulation)" -
+typedef  ^                 WD_InputFileType  Logical         Continuity     - - -  "Solve for continuity or not" -
+typedef  ^                 WD_InputFileType  Logical         ShearVeer      - - -  "Account for Shear/Vear correction" -
 typedef  ^                 WD_InputFileType  ReKi            f_c            - - -  "Cut-off frequency of the low-pass time-filter for the wake advection, deflection, and meandering model [>0.0]" Hz
 typedef  ^                 WD_InputFileType  ReKi            C_HWkDfl_O     - - -  "Calibrated parameter in the correction for wake deflection defining the horizontal offset at the rotor" m
 typedef  ^                 WD_InputFileType  ReKi            C_HWkDfl_OY    - - -  "Calibrated parameter in the correction for wake deflection defining the horizontal offset at the rotor scaled with yaw error" m/rad
@@ -47,7 +55,6 @@ typedef  ^                 WD_InputFileType  ReKi            C_vShr_Exp     - - 
 typedef  ^                 WD_InputFileType  IntKi           Mod_WakeDiam   - - -  "Wake diameter calculation model {1: rotor diameter, 2: velocity-based, 3: mass-flux based, 4: momentum-flux based} [DEFAULT=1]" -
 typedef  ^                 WD_InputFileType  ReKi            C_WakeDiam     - - -  "Calibrated parameter for wake diameter calculation [>0.0 and <1.0] [unused for Mod_WakeDiam=1]" -
 # curled-wake inputs
-typedef  ^                 WD_InputFileType  Logical         Swirl          - - -  "Switch to add swirl [only used if Mod_Wake=2 or 2]" -
 typedef  ^                 WD_InputFileType  ReKi            k_VortexDecay  - - -  "Vortex decay constant for curl" - 
 typedef  ^                 WD_InputFileType  ReKi            sigma_D        -  - - "The width of the Gaussian vortices used for the curled wake model divided by diameter"      -
 typedef  ^                 WD_InputFileType  IntKi           NumVortices    -  - - "The number of vortices used for the curled wake model"      -
@@ -157,7 +164,12 @@ typedef ^ ParameterType  ReKi             r             {:} - -   "Discretizatio
 typedef ^ ParameterType  ReKi             y             {:} - -   "Horizontal discretization of each wake plane (size ny=2nr-1)"        m
 typedef ^ ParameterType  ReKi             z             {:} - -   "Nomically-vertical discretization of each wake plane (size nz=2nr-1)"        m
 typedef ^ ParameterType  IntKi            Mod_Wake       - - -    "Switch between wake formulations 1=Polar, 2=Curl, 3=Cartesian" -
-typedef ^ ParameterType  Logical          Swirl          - - -    "Switch to add swirl [only used if Mod_Wake=2 or 2]" -
+typedef ^ ParameterType  IntKi            NumScheme      - - -    "Finite Difference (1) or Forward-Euler (2)" -
+typedef ^ ParameterType  Logical          Cartesian      - - -    "Cartesian or polar formulation" -
+typedef ^ ParameterType  Logical          Swirl          - - -    "Switch to add swirl (only for cartesian formulation)" -
+typedef ^ ParameterType  Logical          Curl           - - -    "Switch to add curl (only for cartesian formulation)" -
+typedef ^ ParameterType  Logical          Continuity     - - -    "Solve for continuity or not" -
+typedef ^ ParameterType  Logical          ShearVeer      - - -    "Account for Shear/Vear correction" -
 typedef ^ ParameterType  ReKi             k_VortexDecay  - - -    "Vortex decay constant for curl" - 
 typedef ^ ParameterType  ReKi             sigma_D        -  - 0.2 "The width of the Gaussian vortices used for the curled wake model divided by diameter"      -
 typedef ^ ParameterType  IntKi            NumVortices    -  - 100 "The number of vortices used for the curled wake model"      -

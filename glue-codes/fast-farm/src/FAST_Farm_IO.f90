@@ -576,7 +576,6 @@ SUBROUTINE Farm_ReadPrimaryFile( InputFile, p, WD_InitInp, AWAE_InitInp, OutList
    CHARACTER(1024)               :: InflowPathIfW                             ! Path name of the inflow file
    CHARACTER(1024)               :: InflowPathVTK                             ! Path name of the VTK directory
    CHARACTER(1024)               :: InflowPathAMReX                           ! Path name of the AMReX directory
-   character(1024)               :: sDummy ! Dummy string
 
    CHARACTER(10)                 :: AbortLevel                                ! String that indicates which error level should be used to abort the program: WARNING, SEVERE, or FATAL
    CHARACTER(30)                 :: Line                                      ! string for default entry in input file
@@ -589,6 +588,12 @@ SUBROUTINE Farm_ReadPrimaryFile( InputFile, p, WD_InitInp, AWAE_InitInp, OutList
    real(DbKi)                    :: DT_High_IfW, DT_Low_IfW
    real(DbKi)                    :: DT_High_VTK, DT_Low_VTK
    real(DbKi)                    :: DT_High_AMReX, DT_Low_AMReX
+   logical                       :: useCurlDefaultValues ! Some values depend on the model, this is unfortunate.
+   ! Legacy inputs for backward compatibility !Note: remove after version 7.0
+   integer(IntKi)                :: Mod_Wake_Old
+   logical                       :: Swirl_Old
+   character(1024)               :: sLine ! string to temporarially hold value of read line 
+   logical                       :: newFormat
 
       ! Initialize some variables:
    UnEc = -1
@@ -768,7 +773,44 @@ SUBROUTINE Farm_ReadPrimaryFile( InputFile, p, WD_InitInp, AWAE_InitInp, OutList
 
    !---------------------- WAKE DYNAMICS ---------------------------------------------
    CALL ReadCom( UnIn, InputFile, 'Section Header: Wake Dynamics', ErrStat2, ErrMsg2, UnEc ); if (Failed()) return
-   CALL ReadVar( UnIn, InputFile, WD_InitInp%Mod_Wake, "Mod_Wake",  "Wake model", ErrStat2, ErrMsg2, UnEc); if(failed()) return
+   !Note: uncomment after version 7.0
+   !CALL ReadVar( UnIn, InputFile, WD_InitInp%NumScheme, "NumScheme",  "Numerical Scheme {1:Forward-Euler, 2:Finite-Differences}", ErrStat2, ErrMsg2, UnEc); if(failed()) return
+   read(UnIn, '(A)', iostat=ErrStat2) sLine
+   call Conv2UC(sLine)  ! to uppercase
+   newFormat=.True.
+   if (index(sLine, 'NUMSCHEME')>1) then
+      ! New input file
+      READ (sLine, *, IOSTAT=IOS) WD_InitInp%NumScheme
+      CALL CheckIOS ( IOS, InputFile, 'NumScheme', NumType, ErrStat2, ErrMsg2 ); if(failed()) return
+      CALL ReadVarWDefault( UnIn, InputFile, WD_InitInp%Cartesian , "Cartesian ", "Cartesian or polar wake formulation [only applies if NumScheme=2] [DEFAULT=False] (flag)  ", .False., ErrStat2, ErrMsg2, UnEc); if (Failed()) return
+      CALL ReadVarWDefault( UnIn, InputFile, WD_InitInp%Continuity, "Continuity", "Apply continuity (-)                [only applies if NumScheme=2] [DEFAULT=False] (flag)  ", .False., ErrStat2, ErrMsg2, UnEc); if (Failed()) return
+      CALL ReadVarWDefault( UnIn, InputFile, WD_InitInp%Swirl     , "Swirl     ", "Include swirl corrections      (-) [only applies if Cartesian=True] [DEFAULT=False] (flag)", .False., ErrStat2, ErrMsg2, UnEc); if (Failed()) return
+      CALL ReadVarWDefault( UnIn, InputFile, WD_InitInp%Curl      , "Curl      ", "Include curl  corrections      (-) [only applies if Cartesian=True] [DEFAULT=False] (flag)", .False., ErrStat2, ErrMsg2, UnEc); if (Failed()) return
+      CALL ReadVarWDefault( UnIn, InputFile, WD_InitInp%ShearVeer , "ShearVeer ", "Include shear/veer corrections (-) [only applies if Cartesian=True] [DEFAULT=False] (flag)", .False., ErrStat2, ErrMsg2, UnEc); if (Failed()) return
+
+      useCurlDefaultValues = WD_InitInp%Curl .and. WD_InitInp%Cartesian .and. WD_InitInp%NumScheme==NumScheme_FE ! TODO TODO TODO Might need adjusting
+
+
+      WD_InitInp%Mod_Wake = -999 !TODO TODO TODO remove me
+
+   else if (index(sLine, 'MOD_WAKE')>1) then
+      ! Legacy input file !Note: remove after version 7.0
+      newFormat=.False.
+      READ (sLine, *, IOSTAT=IOS) Mod_Wake_Old
+      CALL CheckIOS ( IOS, InputFile, 'Mod_Wake_Old', NumType, ErrStat2, ErrMsg2 ); if(failed()) return
+      call LegacyWarning()
+      WD_InitInp%Mod_Wake = Mod_Wake_Old ! TODO TODO TODO REMOVE ME
+      useCurlDefaultValues = Mod_Wake_Old == Mod_Wake_Curl
+   else
+      ! Unknown format
+      errStat2=ErrID_FATAL
+      errMsg2='NumScheme not found in Wake Dynamics section of FAST.Farm input file.'
+      if(failed()) return
+   endif
+   if (useCurlDefaultValues) then
+      call WrScr('[INFO] `DEFAULT` will have "curl" default values for: C_HWkDfl_OY, C_HWkDfl_xY, Mod_Projection.')
+   endif
+
    CALL ReadVar( UnIn, InputFile, p%RotorDiamRef     , "RotorDiamRef", "Reference turbine rotor diameter for wake calculations (m) [>0.0]", ErrStat2, ErrMsg2, UnEc); if(failed()) return
    CALL ReadVar( UnIn, InputFile, WD_InitInp%dr      , "dr"      ,  "Radial increment of radial finite-difference grid (m) [>0.0]", ErrStat2, ErrMsg2, UnEc); if(failed()) return
    CALL ReadVar( UnIn, InputFile, WD_InitInp%NumRadii, "NumRadii",  "Number of radii in the radial finite-difference grid (-) [>=2]", ErrStat2, ErrMsg2, UnEc); if(failed()) return
@@ -795,7 +837,7 @@ SUBROUTINE Farm_ReadPrimaryFile( InputFile, p, WD_InitInp, AWAE_InitInp, OutList
       0.0_ReKi, ErrStat2, ErrMsg2, UnEc); if (Failed()) return
 
    ! C_HWkDfl_OY
-   if (WD_InitInp%Mod_Wake == Mod_Wake_Curl) then
+   if (useCurlDefaultValues) then
       DefaultReVal = 0.0_ReKi
    else
       DefaultReVal = 0.3_ReKi
@@ -811,7 +853,7 @@ SUBROUTINE Farm_ReadPrimaryFile( InputFile, p, WD_InitInp, AWAE_InitInp, OutList
       0.0_ReKi, ErrStat2, ErrMsg2, UnEc); if (Failed()) return
 
    ! C_HWkDfl_xY
-   if (WD_InitInp%Mod_Wake == Mod_Wake_Curl) then
+   if (useCurlDefaultValues) then
       DefaultReVal = 0.0_ReKi
    else
       DefaultReVal = -0.004_ReKi
@@ -874,8 +916,23 @@ SUBROUTINE Farm_ReadPrimaryFile( InputFile, p, WD_InitInp, AWAE_InitInp, OutList
 
    !----------------------- CURL WAKE PARAMETERS ------------------------------------------
    CALL ReadCom        ( UnIn, InputFile, "Section Header: Curl wake parameters", ErrStat2, ErrMsg2, UnEc ); if(failed()) return
-   CALL ReadVarWDefault( UnIn, InputFile, WD_InitInp%Swirl        ,    "Swirl", "Swirl switch", .True., ErrStat2, ErrMsg2, UnEc); if(failed()) return
-   CALL ReadVarWDefault( UnIn, InputFile, WD_InitInp%k_VortexDecay,    "k_VortexDecay", "Vortex decay constant", 0.0, ErrStat2, ErrMsg2, UnEc); if(failed()) return
+   if (newFormat) then
+      ! Do nothing
+   else
+      ! Legacy !Note: remove after version 7.0
+      CALL ReadVarWDefault( UnIn, InputFile, Swirl_Old        ,    "Swirl", "Swirl switch", .True., ErrStat2, ErrMsg2, UnEc); if(failed()) return
+      WD_InitInp%Swirl = Swirl_Old
+   endif
+   CALL ReadVarWDefault( UnIn, InputFile, WD_InitInp%k_VortexDecay,    "k_VortexDecay", "Vortex decay constant", 0.0, ErrStat2, ErrMsg2, UnEc); 
+   if(failed()) then
+      if (newFormat) then ! Legacy warning !Note: remove after version 7.0
+         call WrScr('')
+         call WrScr('[WARN] You are using the new FAST.Farm format. If you see an error below,')
+         call WrScr('       remember to remove `Swirl` from the wake dynamics section.')
+         call WrScr('')
+         return
+      endif
+   endif
    CALL ReadVarWDefault( UnIn, InputFile, WD_InitInp%NumVortices,      "NumVortices", "Number of vortices in the curled wake", 100, ErrStat2, ErrMsg2, UnEc); if(failed()) return
    CALL ReadVarWDefault( UnIn, InputFile, WD_InitInp%sigma_D,          "sigma_D", "Gaussian vortex width", 0.2, ErrStat2, ErrMsg2, UnEc); if(failed()) return
    CALL ReadVarWDefault( UnIn, InputFile, WD_InitInp%FilterInit,       "FilterInit", "Filter Init", 1 , ErrStat2, ErrMsg2, UnEc); if(failed()) return
@@ -883,7 +940,7 @@ SUBROUTINE Farm_ReadPrimaryFile( InputFile, p, WD_InitInp, AWAE_InitInp, OutList
    CALL ReadVarWDefault( UnIn, InputFile, AWAE_InitInp%Mod_Projection, "Mod_Projection", "Mod_Projection", -1 , ErrStat2, ErrMsg2, UnEc); if(failed()) return
    if (AWAE_InitInp%Mod_Projection==-1) then
       ! -1 means the user selected "default"
-      if (WD_InitInp%Mod_Wake==Mod_Wake_Curl) then
+      if (useCurlDefaultValues) then
            AWAE_InitInp%Mod_Projection=2
       else
            AWAE_InitInp%Mod_Projection=1
@@ -1015,6 +1072,11 @@ SUBROUTINE Farm_ReadPrimaryFile( InputFile, p, WD_InitInp, AWAE_InitInp, OutList
    !---------------------- END OF FILE -----------------------------------------
 
    call cleanup()
+
+   !---------------------- PRINT NEW AND OLD INPUTS --------------------------------
+   ! NOTE: remove me in future release (>6.0)
+   if (.not.newFormat) call setAndPrintNewInputsFromOld()
+
    RETURN
 
 CONTAINS
@@ -1030,6 +1092,52 @@ CONTAINS
       if (Failed) call cleanup()
    end function Failed
    !...............................................................................................................................
+
+   subroutine LegacyWarning()
+      call WrScr('--------------------------------------------------------------------------')
+      call WrScr('[WARN] The FAST.Farm input file is not at its latest format! Visit:' )
+      call WrScr('       https://openfast.readthedocs.io/en/dev/source/user/api_change.html')
+      call WrScr('>>>>>> The variable Mod_Wake has been replaced by the following flags: ') 
+      call WrScr('            `NumScheme`, `Cartesian`, `Swirl`, `Curl`, `ShearVeer`.')
+   end subroutine LegacyWarning
+   subroutine setAndPrintNewInputsFromOld()
+      character(1024)   :: tmpStr
+      if (Mod_Wake_Old==Mod_Wake_Polar) then
+            WD_InitInp%NumScheme  = NumScheme_FD
+            WD_InitInp%Cartesian  = .False.
+            WD_InitInp%Continuity = .True.
+            WD_InitInp%Curl       = .False.
+            WD_InitInp%ShearVeer  = .False.
+            WD_InitInp%Swirl      = .False.
+      else if (Mod_Wake_Old==Mod_Wake_Cartesian) then
+            WD_InitInp%NumScheme  = NumScheme_FE
+            WD_InitInp%Cartesian  = .True.
+            WD_InitInp%Continuity = .False.
+            WD_InitInp%Curl       = .False.
+            WD_InitInp%ShearVeer  = .False.
+            WD_InitInp%Swirl      = Swirl_Old
+      else if (Mod_Wake_Old==Mod_Wake_Curl) then
+            WD_InitInp%NumScheme  = NumScheme_FE
+            WD_InitInp%Cartesian  = .True.
+            WD_InitInp%Continuity = .False.
+            WD_InitInp%Curl       = .True.
+            WD_InitInp%ShearVeer  = .False.
+            WD_InitInp%Swirl      = Swirl_Old
+      endif
+      call WrScr('>>>>>> Old inputs read:')
+      write (tmpStr,'(A25,I0)') 'Mod_Wake:   '        ,  Mod_Wake_Old;      call WrScr(trim(tmpStr))
+      write (tmpStr,'(A25,L1)') 'Swirl:      '        ,  Swirl_Old;         call WrScr(trim(tmpStr))
+      call WrScr('>>>>>> New inputs applied based on old inputs:')
+      write (tmpStr,'(A25,I0)') 'NumScheme:  '        , WD_InitInp%NumScheme;        call WrScr(trim(tmpStr))
+      write (tmpStr,'(A25,L1)') 'Cartesian:  '        , WD_InitInp%Cartesian;        call WrScr(trim(tmpStr))
+      write (tmpStr,'(A25,L1)') 'Continuity: '        , WD_InitInp%Continuity;       call WrScr(trim(tmpStr))
+      write (tmpStr,'(A25,L1)') 'Swirl:      '        , WD_InitInp%Swirl;            call WrScr(trim(tmpStr))
+      write (tmpStr,'(A25,L1)') 'Curl:       '        , WD_InitInp%Curl;             call WrScr(trim(tmpStr))
+      write (tmpStr,'(A25,L1)') 'ShearVeer:  '        , WD_InitInp%ShearVeer;        call WrScr(trim(tmpStr))
+      call WrScr('--------------------------------------------------------------------------')
+   end subroutine setAndPrintNewInputsFromOld
+! 
+
 END SUBROUTINE Farm_ReadPrimaryFile
 !----------------------------------------------------------------------------------------------------------------------------------
 SUBROUTINE Farm_ValidateInput( p, WD_InitInp, AWAE_InitInp, ErrStat, ErrMsg )
@@ -1088,6 +1196,7 @@ SUBROUTINE Farm_ValidateInput( p, WD_InitInp, AWAE_InitInp, ErrStat, ErrMsg )
 
    ! --- WAKE DYNAMICS ---
    IF (WD_InitInp%Mod_Wake < 1 .or. WD_InitInp%Mod_Wake >3 ) CALL SetErrStat(ErrID_Fatal,'Mod_Wake needs to be 1,2 or 3',ErrStat,ErrMsg,RoutineName)
+
    IF (WD_InitInp%dr <= 0.0_ReKi) CALL SetErrStat(ErrID_Fatal,'dr (radial increment) must be larger than 0.',ErrStat,ErrMsg,RoutineName)
    IF (WD_InitInp%NumRadii < 2) CALL SetErrStat(ErrID_Fatal,'NumRadii (number of radii) must be at least 2.',ErrStat,ErrMsg,RoutineName)
    IF (WD_InitInp%NumDFull <= 0.0_ReKi) CALL SetErrStat(ErrID_Fatal,'NumDFull (distance of full wake propagation as a multiple of RotorDiamRef) must be positive.',ErrStat,ErrMsg,RoutineName)
