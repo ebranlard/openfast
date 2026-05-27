@@ -790,17 +790,13 @@ SUBROUTINE Farm_ReadPrimaryFile( InputFile, p, WD_InitInp, AWAE_InitInp, OutList
 
       useCurlDefaultValues = WD_InitInp%Curl .and. WD_InitInp%Cartesian .and. WD_InitInp%NumScheme==NumScheme_FE ! TODO TODO TODO Might need adjusting
 
-
-      WD_InitInp%Mod_Wake = -999 !TODO TODO TODO remove me
-
    else if (index(sLine, 'MOD_WAKE')>1) then
       ! Legacy input file !Note: remove after version 7.0
       newFormat=.False.
       READ (sLine, *, IOSTAT=IOS) Mod_Wake_Old
       CALL CheckIOS ( IOS, InputFile, 'Mod_Wake_Old', NumType, ErrStat2, ErrMsg2 ); if(failed()) return
       call LegacyWarning()
-      WD_InitInp%Mod_Wake = Mod_Wake_Old ! TODO TODO TODO REMOVE ME
-      useCurlDefaultValues = Mod_Wake_Old == Mod_Wake_Curl
+      useCurlDefaultValues = Mod_Wake_Old == 2 ! 2=curl
    else
       ! Unknown format
       errStat2=ErrID_FATAL
@@ -1076,6 +1072,7 @@ SUBROUTINE Farm_ReadPrimaryFile( InputFile, p, WD_InitInp, AWAE_InitInp, OutList
    !---------------------- PRINT NEW AND OLD INPUTS --------------------------------
    ! NOTE: remove me in future release (>6.0)
    if (.not.newFormat) call setAndPrintNewInputsFromOld()
+   call setReasonableInputs()
 
    RETURN
 
@@ -1102,21 +1099,21 @@ CONTAINS
    end subroutine LegacyWarning
    subroutine setAndPrintNewInputsFromOld()
       character(1024)   :: tmpStr
-      if (Mod_Wake_Old==Mod_Wake_Polar) then
+      if (Mod_Wake_Old==1) then
             WD_InitInp%NumScheme  = NumScheme_FD
             WD_InitInp%Cartesian  = .False.
             WD_InitInp%Continuity = .True.
             WD_InitInp%Curl       = .False.
             WD_InitInp%ShearVeer  = .False.
             WD_InitInp%Swirl      = .False.
-      else if (Mod_Wake_Old==Mod_Wake_Cartesian) then
+      else if (Mod_Wake_Old==3) then
             WD_InitInp%NumScheme  = NumScheme_FE
             WD_InitInp%Cartesian  = .True.
             WD_InitInp%Continuity = .False.
             WD_InitInp%Curl       = .False.
             WD_InitInp%ShearVeer  = .False.
             WD_InitInp%Swirl      = Swirl_Old
-      else if (Mod_Wake_Old==Mod_Wake_Curl) then
+      else if (Mod_Wake_Old==2) then
             WD_InitInp%NumScheme  = NumScheme_FE
             WD_InitInp%Cartesian  = .True.
             WD_InitInp%Continuity = .False.
@@ -1136,6 +1133,17 @@ CONTAINS
       write (tmpStr,'(A25,L1)') 'ShearVeer:  '        , WD_InitInp%ShearVeer;        call WrScr(trim(tmpStr))
       call WrScr('--------------------------------------------------------------------------')
    end subroutine setAndPrintNewInputsFromOld
+
+   subroutine setReasonableInputs
+      if (.not. WD_InitInp%Cartesian) then
+         if (WD_InitInp%Swirl    ) call WrScr('[INFO] Cartesian is False -> Setting Swirl     to False.')
+         if (WD_InitInp%Curl     ) call WrScr('[INFO] Cartesian is False -> Setting Curl      to False.')
+         if (WD_InitInp%ShearVeer) call WrScr('[INFO] Cartesian is False -> Setting ShearVeer to False.')
+         WD_InitInp%Swirl = .False.
+         WD_InitInp%Curl = .False.
+         WD_InitInp%ShearVeer = .False.
+      endif
+   end subroutine setReasonableInputs
 ! 
 
 END SUBROUTINE Farm_ReadPrimaryFile
@@ -1195,7 +1203,15 @@ SUBROUTINE Farm_ValidateInput( p, WD_InitInp, AWAE_InitInp, ErrStat, ErrMsg )
    end select
 
    ! --- WAKE DYNAMICS ---
-   IF (WD_InitInp%Mod_Wake < 1 .or. WD_InitInp%Mod_Wake >3 ) CALL SetErrStat(ErrID_Fatal,'Mod_Wake needs to be 1,2 or 3',ErrStat,ErrMsg,RoutineName)
+   if (WD_InitInp%NumScheme < 1 .or. WD_InitInp%NumScheme >3 ) CALL SetErrStat(ErrID_Fatal,'NumScheme needs to be 1 or 2',ErrStat,ErrMsg,RoutineName)
+   if (WD_InitInp%NumScheme == NumScheme_FE) then
+      if (WD_InitInp%Continuity) CALL SetErrStat(ErrID_Fatal,'Continuity cannot be true with Forward Euler scheme.',ErrStat,ErrMsg,RoutineName)
+   endif
+   if (.not.WD_InitInp%Cartesian) then ! Resaonable inputs prevent those anyway
+      if (WD_InitInp%Swirl)     CALL SetErrStat(ErrID_Fatal,'Swirl cannot be true with Cartesian.',ErrStat,ErrMsg,RoutineName)
+      if (WD_InitInp%Curl)      CALL SetErrStat(ErrID_Fatal,'Curl cannot be true with Cartesian.',ErrStat,ErrMsg,RoutineName)
+      if (WD_InitInp%ShearVeer) CALL SetErrStat(ErrID_Fatal,'ShearVeer cannot be true with Cartesian.',ErrStat,ErrMsg,RoutineName)
+   endif
 
    IF (WD_InitInp%dr <= 0.0_ReKi) CALL SetErrStat(ErrID_Fatal,'dr (radial increment) must be larger than 0.',ErrStat,ErrMsg,RoutineName)
    IF (WD_InitInp%NumRadii < 2) CALL SetErrStat(ErrID_Fatal,'NumRadii (number of radii) must be at least 2.',ErrStat,ErrMsg,RoutineName)

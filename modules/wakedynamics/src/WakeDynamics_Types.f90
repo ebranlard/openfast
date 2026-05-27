@@ -37,9 +37,6 @@ IMPLICIT NONE
     INTEGER(IntKi), PUBLIC, PARAMETER  :: WakeDiamMod_Velocity             = 2      ! Wake diameter calculation model: velocity-based [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: WakeDiamMod_MassFlux             = 3      ! Wake diameter calculation model: mass-flux based [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: WakeDiamMod_MtmFlux              = 4      ! Wake diameter calculation model: momentum-flux based [-]
-    INTEGER(IntKi), PUBLIC, PARAMETER  :: Mod_Wake_Polar                   = 1      ! Wake model [-]
-    INTEGER(IntKi), PUBLIC, PARAMETER  :: Mod_Wake_Curl                    = 2      ! Wake model [-]
-    INTEGER(IntKi), PUBLIC, PARAMETER  :: Mod_Wake_Cartesian               = 3      ! Wake model [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: NumScheme_FE                     = 1      ! Numerical scheme forward Euler [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: NumScheme_FD                     = 2      ! Numerical scheme finite differences [-]
 ! =========  WD_InputFileType  =======
@@ -48,7 +45,6 @@ IMPLICIT NONE
     INTEGER(IntKi)  :: NumRadii = 0_IntKi      !< Number of radii in the radial finite-difference grid [>=2] [-]
     REAL(ReKi)  :: NumDFull = 0.0_ReKi      !< Distance of full wake propagation as a multiple of RotorDiamRef [-]
     REAL(ReKi)  :: NumDBuff = 0.0_ReKi      !< Length of wake propagation buffer region as a multiple of RotorDiamRef [-]
-    INTEGER(IntKi)  :: Mod_Wake = 0_IntKi      !< Switch between wake formulations 1=Polar, 2=Cartesian, 3=Curl [-]
     INTEGER(IntKi)  :: NumScheme = 0_IntKi      !< Finite Difference (1) or Forward-Euler (2) [-]
     LOGICAL  :: Cartesian = .false.      !< Cartesian or polar formulation [-]
     LOGICAL  :: Swirl = .false.      !< Switch to add swirl (only for cartesian formulation) [-]
@@ -185,7 +181,6 @@ IMPLICIT NONE
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: r      !< Discretization of radial finite-difference grid [m]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: y      !< Horizontal discretization of each wake plane (size ny=2nr-1) [m]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: z      !< Nomically-vertical discretization of each wake plane (size nz=2nr-1) [m]
-    INTEGER(IntKi)  :: Mod_Wake = 0_IntKi      !< Switch between wake formulations 1=Polar, 2=Curl, 3=Cartesian [-]
     INTEGER(IntKi)  :: NumScheme = 0_IntKi      !< Finite Difference (1) or Forward-Euler (2) [-]
     LOGICAL  :: Cartesian = .false.      !< Cartesian or polar formulation [-]
     LOGICAL  :: Swirl = .false.      !< Switch to add swirl (only for cartesian formulation) [-]
@@ -304,7 +299,6 @@ subroutine WD_CopyInputFileType(SrcInputFileTypeData, DstInputFileTypeData, Ctrl
    DstInputFileTypeData%NumRadii = SrcInputFileTypeData%NumRadii
    DstInputFileTypeData%NumDFull = SrcInputFileTypeData%NumDFull
    DstInputFileTypeData%NumDBuff = SrcInputFileTypeData%NumDBuff
-   DstInputFileTypeData%Mod_Wake = SrcInputFileTypeData%Mod_Wake
    DstInputFileTypeData%NumScheme = SrcInputFileTypeData%NumScheme
    DstInputFileTypeData%Cartesian = SrcInputFileTypeData%Cartesian
    DstInputFileTypeData%Swirl = SrcInputFileTypeData%Swirl
@@ -367,7 +361,6 @@ subroutine WD_PackInputFileType(RF, Indata)
    call RegPack(RF, InData%NumRadii)
    call RegPack(RF, InData%NumDFull)
    call RegPack(RF, InData%NumDBuff)
-   call RegPack(RF, InData%Mod_Wake)
    call RegPack(RF, InData%NumScheme)
    call RegPack(RF, InData%Cartesian)
    call RegPack(RF, InData%Swirl)
@@ -422,7 +415,6 @@ subroutine WD_UnPackInputFileType(RF, OutData)
    call RegUnpack(RF, OutData%NumRadii); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%NumDFull); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%NumDBuff); if (RegCheckErr(RF, RoutineName)) return
-   call RegUnpack(RF, OutData%Mod_Wake); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%NumScheme); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%Cartesian); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%Swirl); if (RegCheckErr(RF, RoutineName)) return
@@ -1484,7 +1476,6 @@ subroutine WD_CopyParam(SrcParamData, DstParamData, CtrlCode, ErrStat, ErrMsg)
       end if
       DstParamData%z = SrcParamData%z
    end if
-   DstParamData%Mod_Wake = SrcParamData%Mod_Wake
    DstParamData%NumScheme = SrcParamData%NumScheme
    DstParamData%Cartesian = SrcParamData%Cartesian
    DstParamData%Swirl = SrcParamData%Swirl
@@ -1565,7 +1556,6 @@ subroutine WD_PackParam(RF, Indata)
    call RegPackAlloc(RF, InData%r)
    call RegPackAlloc(RF, InData%y)
    call RegPackAlloc(RF, InData%z)
-   call RegPack(RF, InData%Mod_Wake)
    call RegPack(RF, InData%NumScheme)
    call RegPack(RF, InData%Cartesian)
    call RegPack(RF, InData%Swirl)
@@ -1632,7 +1622,6 @@ subroutine WD_UnPackParam(RF, OutData)
    call RegUnpackAlloc(RF, OutData%r); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpackAlloc(RF, OutData%y); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpackAlloc(RF, OutData%z); if (RegCheckErr(RF, RoutineName)) return
-   call RegUnpack(RF, OutData%Mod_Wake); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%NumScheme); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%Cartesian); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%Swirl); if (RegCheckErr(RF, RoutineName)) return

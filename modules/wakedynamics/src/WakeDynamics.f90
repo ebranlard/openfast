@@ -427,7 +427,12 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
    p%TurbNum     = InitInp%TurbNum
    p%DT_low      = interval
    ! Parameters from input file
-   p%Mod_Wake      = InitInp%InputFileData%Mod_Wake
+   p%NumScheme     = InitInp%InputFileData%NumScheme
+   p%Cartesian     = InitInp%InputFileData%Cartesian
+   p%Continuity    = InitInp%InputFileData%Continuity
+   p%Swirl         = InitInp%InputFileData%Swirl
+   p%Curl          = InitInp%InputFileData%Curl
+   p%ShearVeer     = InitInp%InputFileData%ShearVeer
    p%MaxNumPlanes  = InitInp%MaxNumPlanes
    p%NumRadii      = InitInp%InputFileData%NumRadii    
    p%x_Full        = InitInp%InputFileData%NumDFull * InitInp%InputFileData%RotorDiamRef
@@ -569,12 +574,12 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
    m%vt_shr2   = 0.0_ReKi
    m%dvx_dy    = 0.0_ReKi
    m%dvx_dz    = 0.0_ReKi
-   if (p%Mod_Wake == Mod_Wake_Polar) then
+   if (.not. p%Cartesian) then
       allocate (   m%dvtdr  (0:p%NumRadii-1 ) , STAT=ErrStat2 );  if (Failed0('m%dvtdr.')) return;
       allocate (   m%vt_tot (0:p%NumRadii-1,0:p%MaxNumPlanes-1 ) , STAT=ErrStat2 );  if (Failed0('m%vt_tot.')) return;
       allocate (   m%vt_amb (0:p%NumRadii-1,0:p%MaxNumPlanes-1 ) , STAT=ErrStat2 );  if (Failed0('m%vt_amb.')) return;
       allocate (   m%vt_shr (0:p%NumRadii-1,0:p%MaxNumPlanes-1 ) , STAT=ErrStat2 );  if (Failed0('m%vt_shr.')) return;
-   else if (p%Mod_Wake == Mod_Wake_Cartesian .or. p%Mod_Wake == Mod_Wake_Curl) then
+   else ! Cartesian
       allocate (   m%nu_dvx_dy(-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1), STAT=ErrStat2 );  if (Failed0('m%nu_dvx_dy.')) return;
       allocate (   m%nu_dvx_dz(-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1), STAT=ErrStat2 );  if (Failed0('m%nu_dvx_dz.')) return;
       allocate (   m%dnuvx_dy (-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1), STAT=ErrStat2 );  if (Failed0('m%dnuvx_dy.' )) return;
@@ -584,8 +589,6 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
       m%nu_dvx_dz = 0.0_ReKi
       m%dnuvx_dy  = 0.0_ReKi
       m%dnuvx_dz  = 0.0_ReKi
-   else
-      STOP ! should never happen
    endif
 
 
@@ -757,7 +760,7 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
       lstar = WakeDiam( p%Mod_WakeDiam, p%numRadii, p%dr, p%r, xd%Vx_wake(:,i-1), xd%Vx_wind_disk_filt(i-1), xd%D_rotor_filt(i-1), p%C_WakeDiam) / 2.0_ReKi     
 
       Vx_wake_min = huge(ReKi)
-      if (p%Mod_Wake == Mod_Wake_Cartesian .or. p%Mod_Wake == Mod_Wake_Curl) then
+      if (p%Cartesian) then
          Vx_wake_min = minval(xd%Vx_wake2(:,:,i-1))
       else
          do j = 0,p%NumRadii-1
@@ -768,7 +771,7 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
       EddyTermA = EddyFilter(xd%x_plane(i-1),xd%D_rotor_filt(i-1), p%C_vAmb_DMin, p%C_vAmb_DMax, p%C_vAmb_FMin, p%C_vAmb_Exp) * p%k_vAmb * xd%TI_amb_filt(i-1) * xd%Vx_wind_disk_filt(i-1) * xd%D_rotor_filt(i-1)/2.0_ReKi
       EddyTermB = EddyFilter(xd%x_plane(i-1),xd%D_rotor_filt(i-1), p%C_vShr_DMin, p%C_vShr_DMax, p%C_vShr_FMin, p%C_vShr_Exp) * p%k_vShr
       vt_min    = abs(1.e-4_ReKi * xd%D_Rotor_filt(i-1) * xd%Vx_rel_disk_filt) ! Miminum eddy viscosity
-      if (p%Mod_Wake == Mod_Wake_Polar) then
+      if (.not. p%Cartesian) then
          ! Polar grid
          do j = 0,p%NumRadii-1      
             if ( j == 0 ) then
@@ -784,7 +787,7 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
             m%vt_tot(j,i-1) = m%vt_amb(j,i-1) + m%vt_shr(j,i-1) 
 
          end do
-      else if (p%Mod_Wake == Mod_Wake_Cartesian .or. p%Mod_Wake == Mod_Wake_Curl) then
+      else 
          ! First compute gradients of dVx/dy and dVx/dz
          call gradient_y(xd%Vx_wake2(:,:,i-1), p%dr, m%dvx_dy(:,:,i-1))
          call gradient_z(xd%Vx_wake2(:,:,i-1), p%dr, m%dvx_dz(:,:,i-1))
@@ -813,13 +816,25 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
          enddo
       endif
    end do ! loop on planes i = maxPln+1, 1, -1
-   ! --- Update Vx and Vr
-   if (p%Mod_Wake == Mod_Wake_Polar) then
-      call updateVelocityPolar()
-   else if (p%Mod_Wake == Mod_Wake_Cartesian .or. p%Mod_Wake == Mod_Wake_Curl) then
-      call updateVelocityCartesian()
+
+   ! --- Update Vx and Vr or Vy, Vz
+   if (p%Cartesian) then
+      if ( p%NumScheme == NumScheme_FE ) then
+         call updateVelocityCartesianFE()
+
+      elseif ( p%NumScheme == NumScheme_FD ) then
+         !call updateVelocityCartesianFD()
+         errStat2 = ErrID_FATAL; errMsg2 = 'Cartesian finite-difference not implemented yet.'; if (failed()) return
+      endif
    else
-      ! Should never happen
+      ! --- Polar
+      if ( p%NumScheme == NumScheme_FE ) then
+         !call updateVelocityPolarFE()
+         errStat2 = ErrID_FATAL; errMsg2 = 'Polar forward-Euler not implemented yet.'; if (failed()) return
+
+      elseif ( p%NumScheme == NumScheme_FD ) then
+         call updateVelocityPolarFD()
+      endif
    endif
    if (errStat >= AbortErrLev) then
       call CleanUp()
@@ -908,8 +923,8 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
    ! --- Set velocity at disk plane
    m%GammaCurl = 0.0_ReKi ! Storing for outputs
    m%Ct_avg    = 0.0_ReKi ! Storing for outputs
-   if (p%Mod_Wake == Mod_Wake_Polar) then
-
+   if (.not. p%Cartesian) then
+      ! --- Polar
       ! Compute wake deficit of first plane based on rotor loading, outputs: Vx_Wake, m
       call NearWakeCorrection( xd%Ct_azavg_filt, xd%Cq_azavg_filt, xd%Vx_rel_disk_filt, p, m, xd%Vx_wake(:,0), m%Vt_wake, xd%D_rotor_filt(0), errStat2, errMsg2 )
       call SetErrStat(ErrStat2, ErrMsg2, errStat, errMsg, RoutineName)
@@ -919,8 +934,8 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
       end if
       m%Ct_avg =  get_Ctavg(p%r, xd%Ct_azavg_filt, xd%D_rotor_filt(0))
 
-   else if (p%Mod_Wake == Mod_Wake_Cartesian .or. p%Mod_Wake == Mod_Wake_Curl) then
-
+   else
+      ! --- Cartesian
       ! Initialize the spanwise velocities to zero.
       ! Thses will be changed by AddSwirl and/or AddVelocityCurl
       xd%Vy_wake2(:,:,0) = 0._ReKi 
@@ -939,7 +954,7 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
       call FilterVx(xd%Vx_wake2(:,:,0), p%FilterInit) ! don't filter if FilterInit is 0
       m%Ct_avg =  get_Ctavg(p%r, xd%Ct_azavg_filt, xd%D_rotor_filt(0))
       ! --- Add V/W from vorticies 
-      if (p%Mod_Wake == Mod_Wake_Curl) then
+      if (p%Curl) then
          call AddVelocityCurl(xd%Vx_wind_disk_filt(0), xd%chi_skew_filt, p%NumVortices, xd%D_Rotor_filt(0)/2., &
                            xd%psi_skew_filt, p%y, p%z, m%Ct_avg, p%sigma_D, xd%Vy_wake2(:,:,0), xd%Vz_wake2(:,:,0), m%GammaCurl)
 
@@ -1034,7 +1049,7 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
    
 contains
 
-   subroutine updateVelocityPolar()
+   subroutine updateVelocityPolarFD()
       integer(intKi) :: i,j
       real(ReKi)  :: dx, absdx
       ! The quantities in these loops are all at time [n], so we need to compute prior to updating the states to [n+1] (loop in reversed)
@@ -1088,18 +1103,31 @@ contains
                   ! TEST: E16, E17, or E18
                   return
                end if  
-            do j = 1,p%NumRadii-1
-               ! NOTE: xd%Vr_wake(0,:) was initialized to 0 and remains 0.
-               xd%Vr_wake(j,i) = real(  j-1,ReKi)*(  xd%Vr_wake(j-1,i)  )/real(j,ReKi) &
-               !  Vx_wake is for the                           [n+1]       ,      [n+1]        ,      [n]          , and    [n]        increments             
-                               - real(2*j-1,ReKi)*p%dr * (  xd%Vx_wake(j,i) + xd%Vx_wake(j-1,i) - xd%Vx_wake(j,i-1) - xd%Vx_wake(j-1,i-1)  ) / ( real(4*j,ReKi) * absdx )
-            end do  
+            if ( p%Continuity ) then
+               do j = 1,p%NumRadii-1
+                  ! NOTE: xd%Vr_wake(0,:) was initialized to 0 and remains 0.
+                  xd%Vr_wake(j,i) = real(  j-1,ReKi)*(  xd%Vr_wake(j-1,i)  )/real(j,ReKi) &
+                  !  Vx_wake is for the                           [n+1]       ,      [n+1]        ,      [n]          , and    [n]        increments             
+                                  - real(2*j-1,ReKi)*p%dr * (  xd%Vx_wake(j,i) + xd%Vx_wake(j-1,i) - xd%Vx_wake(j,i-1) - xd%Vx_wake(j-1,i-1)  ) / ( real(4*j,ReKi) * absdx )
+               end do  
+            end if ! Continuity
          end if
       end do ! i = maxPln, 1, -1
-   end subroutine updateVelocityPolar
+   end subroutine updateVelocityPolarFD
 
    !> 
-   subroutine updateVelocityCartesian()
+   subroutine updateVelocityPolarFE()
+      ! TODO (very low priority)
+   end subroutine updateVelocityPolarFE
+
+
+   !> 
+   subroutine updateVelocityCartesianFD()
+      ! TODO
+   end subroutine updateVelocityCartesianFD
+
+   !> 
+   subroutine updateVelocityCartesianFE()
       integer(intKi) :: iy,iz,i
       real(ReKi)  :: dx
       real(ReKi)  :: xp !< x position of the plane
@@ -1143,10 +1171,16 @@ contains
          enddo ! iz     
       enddo ! i, planes
 
-   end subroutine updateVelocityCartesian
+   end subroutine updateVelocityCartesianFE
 
-   subroutine Cleanup()
-   end subroutine Cleanup
+   logical function Failed()
+      call SetErrStat(errStat2, errMsg2, errStat, errMsg, 'WD_UpdateStates') 
+      Failed =  errStat >= AbortErrLev
+      if (Failed) call CleanUp()
+   end function Failed
+
+   subroutine CleanUp()
+   end subroutine CleanUp
    
 end subroutine WD_UpdateStates
 
@@ -1642,7 +1676,7 @@ subroutine WD_CalcOutput( t, u, p, x, xd, z, OtherState, y, m, errStat, errMsg )
    end do
 
    ! --- Velocity deficits on Cartesian grid
-   if (p%Mod_Wake == Mod_Wake_Polar) then
+   if (.not. p%Cartesian) then
       ! Convert to Cartesian
       do i = 0, maxPln
          call Axisymmetric2CartesianVel(y%Vx_wake(:,i), y%Vr_wake(:,i), p%r, p%y, p%z, y%Vx_wake2(:,:,i), y%Vy_wake2(:,:,i), y%Vz_wake2(:,:,i))
@@ -1661,13 +1695,13 @@ subroutine WD_CalcOutput( t, u, p, x, xd, z, OtherState, y, m, errStat, errMsg )
             call Axisymmetric2Cartesian(m%vt_tot(:,i), p%r, p%y, p%z, m%vt_tot2(:,:,i))
          enddo
       endif
-   else if (p%Mod_Wake == Mod_Wake_Cartesian .or. p%Mod_Wake == Mod_Wake_Curl) then
+   else 
       do i = 0, maxPln
          y%Vx_wake2(:,:,i) = xd%Vx_wake2(:,:,i)
          y%Vy_wake2(:,:,i) = xd%Vy_wake2(:,:,i)
          y%Vz_wake2(:,:,i) = xd%Vz_wake2(:,:,i)
       enddo
-   endif ! Curl or Polar
+   endif 
 
    ! --- WAT - Compute k_mt and add turbulence
    if ( p%WAT ) then
@@ -1682,7 +1716,7 @@ contains
       character(1024):: tmpStr
       logical, parameter :: verbose =.False.
 
-      ! We use the same method for all Mod_Wake (everything on the Cartesian grid)
+      ! Sone on the Cartesian grid
       R = u%D_Rotor /2
       do i = 0,maxPln  
          U0 = xd%Vx_wind_disk_filt(i)
@@ -1792,7 +1826,7 @@ subroutine WD_WritePlaneOutputs( t, u, p, x, xd, z, OtherState, y, m, errStat, e
             call vtk_point_data_scalar(m%vt_shr2(:,:,i),'vt_shr2', mvtk) 
             call vtk_point_data_scalar(m%vt_tot2(:,:,i),'vt_tot2', mvtk) 
 
-            if (p%Mod_Wake == Mod_Wake_Cartesian .or. p%Mod_Wake == Mod_Wake_Curl) then
+            if ( p%Cartesian ) then
                call vtk_point_data_scalar(m%dvx_dy(:,:,i),'dvx_dy', mvtk) 
                call vtk_point_data_scalar(m%dvx_dz(:,:,i),'dvx_dz', mvtk) 
             endif

@@ -1467,7 +1467,7 @@ subroutine Farm_WriteOutput(n, t, farm, ErrStat, ErrMsg)
                         ! Wake diameter for downstream wake volume, np, of turbine, nt, m
                      farm%m%AllOuts(WkDiamTD(iOutDist,nt)) = delta*farm%WD(nt)%y%D_wake(np+1) + deltad*farm%WD(nt)%y%D_wake(np)  !farm%AWAE%u%D_wake(np,nt)
             
-                     if (farm%WD(nt)%p%Mod_Wake == Mod_Wake_Polar) then
+                     if (.not. farm%WD(nt)%p%Cartesian) then ! Polar
                         do ir = 1, farm%p%NOutRadii
                      
                               ! Axial and radial wake velocity deficits for radial node, OutRadii(ir), and downstream wake volume, np, of turbine, nt, m/s

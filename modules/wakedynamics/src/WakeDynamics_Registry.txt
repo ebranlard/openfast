@@ -18,9 +18,6 @@ param WakeDynamics/WD      -               INTEGER         WakeDiamMod_RotDiam  
 param ^                    -               INTEGER         WakeDiamMod_Velocity    - 2 -  "Wake diameter calculation model: velocity-based" -
 param ^                    -               INTEGER         WakeDiamMod_MassFlux    - 3 -  "Wake diameter calculation model: mass-flux based" -
 param ^                    -               INTEGER         WakeDiamMod_MtmFlux     - 4 -  "Wake diameter calculation model: momentum-flux based" -
-param ^                    -               INTEGER         Mod_Wake_Polar          - 1 -  "Wake model" -
-param ^                    -               INTEGER         Mod_Wake_Curl           - 2 -  "Wake model" -
-param ^                    -               INTEGER         Mod_Wake_Cartesian      - 3 -  "Wake model" -
 param ^                    -               INTEGER         NumScheme_FE            - 1 -  "Numerical scheme forward Euler" -
 param ^                    -               INTEGER         NumScheme_FD            - 2 -  "Numerical scheme finite differences" -
 
@@ -29,7 +26,6 @@ typedef  ^                 WD_InputFileType  ReKi            dr             - - 
 typedef  ^                 WD_InputFileType  IntKi           NumRadii       - - -  "Number of radii in the radial finite-difference grid [>=2]" -
 typedef  ^                 WD_InputFileType  ReKi            NumDFull       - - -  "Distance of full wake propagation as a multiple of RotorDiamRef" -
 typedef  ^                 WD_InputFileType  ReKi            NumDBuff       - - -  "Length of wake propagation buffer region as a multiple of RotorDiamRef" -
-typedef  ^                 WD_InputFileType  IntKi           Mod_Wake       - - -  "Switch between wake formulations 1=Polar, 2=Cartesian, 3=Curl" -
 typedef  ^                 WD_InputFileType  IntKi           NumScheme      - - -  "Finite Difference (1) or Forward-Euler (2)" -
 typedef  ^                 WD_InputFileType  Logical         Cartesian      - - -  "Cartesian or polar formulation" -
 typedef  ^                 WD_InputFileType  Logical         Swirl          - - -  "Switch to add swirl (only for cartesian formulation)" -
@@ -163,7 +159,6 @@ typedef ^ ParameterType  ReKi             dr             -  - -   "Radial increm
 typedef ^ ParameterType  ReKi             r             {:} - -   "Discretization of radial finite-difference grid"        m
 typedef ^ ParameterType  ReKi             y             {:} - -   "Horizontal discretization of each wake plane (size ny=2nr-1)"        m
 typedef ^ ParameterType  ReKi             z             {:} - -   "Nomically-vertical discretization of each wake plane (size nz=2nr-1)"        m
-typedef ^ ParameterType  IntKi            Mod_Wake       - - -    "Switch between wake formulations 1=Polar, 2=Curl, 3=Cartesian" -
 typedef ^ ParameterType  IntKi            NumScheme      - - -    "Finite Difference (1) or Forward-Euler (2)" -
 typedef ^ ParameterType  Logical          Cartesian      - - -    "Cartesian or polar formulation" -
 typedef ^ ParameterType  Logical          Swirl          - - -    "Switch to add swirl (only for cartesian formulation)" -

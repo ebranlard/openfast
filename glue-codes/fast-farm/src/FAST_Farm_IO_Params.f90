@@ -15492,7 +15492,7 @@ SUBROUTINE Farm_SetOutParam(OutList, farm, ErrStat, ErrMsg )
 
    ! Curled/Cartesian wake checks 
    do i = 1,farm%p%NOutTurb ! Valid turbine number 
-      if (farm%WD(i)%p%Mod_Wake /= Mod_Wake_Polar) then
+      if (farm%WD(i)%p%Cartesian) then
          ! Polar outputs not available
          do j =1, 9 ! Diameters
             InvalidOutput( WkDfVxTND(:,j,i) ) = .true.
@@ -15502,7 +15502,7 @@ SUBROUTINE Farm_SetOutParam(OutList, farm, ErrStat, ErrMsg )
             InvalidOutput( EddShrTND(:,j,i) ) = .true.
          enddo
       endif
-      if (farm%WD(i)%p%Mod_Wake /= Mod_Wake_Curl) then
+      if (.not. farm%WD(i)%p%Curl) then
          ! Curled variables not valid
          InvalidOutput( RtGamCurlT  (i) ) = .true.
       endif
