@@ -723,21 +723,15 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
    errMsg  = ""
    
    if ( EqualRealNos(u%D_Rotor,0.0_ReKi) .or. u%D_Rotor < 0.0_ReKi ) then
-      ! TEST: E7
-      call SetErrStat(ErrID_Fatal, 'Rotor diameter must be greater than zero.', errStat, errMsg, RoutineName)
+      call Abort('Rotor diameter must be greater than zero.')
       return
    end if
    
       ! Check if we are fully initialized
    if ( OtherState%firstPass ) then
       call InitStatesWithInputs(p%MaxNumPlanes, p%NumRadii, u, p, xd, m, errStat2, errMsg2)
-         call SetErrStat(errStat2, errMsg2, errStat, errMsg, RoutineName)
       OtherState%firstPass = .false.        
-      if (errStat >= AbortErrLev) then
-         ! TEST: E3 
-         return
-      end if
-      
+      if (failed()) return
    end if         
    
 
@@ -824,13 +818,13 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
 
       elseif ( p%NumScheme == NumScheme_FD ) then
          !call updateVelocityCartesianFD()
-         errStat2 = ErrID_FATAL; errMsg2 = 'Cartesian finite-difference not implemented yet.'; if (failed()) return
+         call Abort('Cartesian finite-difference not implemented yet.'); return
       endif
    else
       ! --- Polar
       if ( p%NumScheme == NumScheme_FE ) then
          !call updateVelocityPolarFE()
-         errStat2 = ErrID_FATAL; errMsg2 = 'Polar forward-Euler not implemented yet.'; if (failed()) return
+         call Abort('Polar forward-Euler not implemented yet.'); return
 
       elseif ( p%NumScheme == NumScheme_FD ) then
          call updateVelocityPolarFD()
@@ -855,13 +849,7 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
       xd%xhat_plane(:,i) = xd%xhat_plane(:,i-1)
       
       ! The function state-related arguments must be at time [n+1], so we must update YawErr_filt and xhat_plane before computing the deflection
-      dy_HWkDfl = GetYawCorrection(xd%YawErr_filt(i), xd%xhat_plane(:,i), dx, p, errStat2, errMsg2)
-         call SetErrStat(errStat2, errMsg2, errStat, errMsg, RoutineName)   
-         if (errStat >= AbortErrLev) then
-            ! TEST: E3          
-            call Cleanup()
-            return
-         end if
+      dy_HWkDfl = GetYawCorrection(xd%YawErr_filt(i), xd%xhat_plane(:,i), dx, p, errStat2, errMsg2); if(failed()) return
       ! Old convection
       !xd%p_plane        (:,i) =  xd%p_plane(:,i-1) + xd%xhat_plane(:,i-1)*dx + dy_HWkDfl &
       !                        + ( u%V_plane(:,i-1) - xd%xhat_plane(:,i-1)*dot_product(xd%xhat_plane(:,i-1),u%V_plane(:,i-1)) )*p%DT_low
@@ -880,10 +868,9 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
    !xd%x_plane         (0) = 0.0_ReKi ! already initialized to zero
    xd%xhat_plane     (:,0) =  xd%xhat_plane(:,0)*p%filtParam + u%xhat_disk(:)*p%oneMinusFiltParam  ! 2-step calculation for xhat_plane at disk
    norm2_xhat_plane        =  TwoNorm( xd%xhat_plane(:,0) ) 
-   if ( EqualRealNos(norm2_xhat_plane, 0.0_ReKi) ) then
+   if ( EqualRealNos(norm2_xhat_plane, 0.0_ReKi) ) then 
       ! TEST: E1
-      call SetErrStat(ErrID_FATAL, 'The nacelle-yaw has rotated 180 degrees between time steps, i.e., the L2 norm of xd%xhat_plane(:,0)*p%filtParam + u%xhat_disk(:)*(1-p%filtParam) is zero.', errStat, errMsg, RoutineName) 
-      call Cleanup()
+      call Abort('The nacelle-yaw has rotated 180 degrees between time steps, i.e., the L2 norm of xd%xhat_plane(:,0)*p%filtParam + u%xhat_disk(:)*(1-p%filtParam) is zero.');
       return
    end if
    xd%xhat_plane     (:,0) =  xd%xhat_plane(:,0) / norm2_xhat_plane
@@ -894,20 +881,13 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
   
    if ( EqualRealNos(abs(xd%YawErr_filt(0)), pi/2) .or. abs(xd%YawErr_filt(0)) > pi/2 ) then
       ! TEST: E4
-      call SetErrStat(ErrID_FATAL, 'The time-filtered nacelle-yaw error has reached +/- pi/2.', errStat, errMsg, RoutineName) 
-      call Cleanup()
+      call Abort('The time-filtered nacelle-yaw error has reached +/- pi/2.')
       return
    end if
    
    ! The function state-related arguments must be at time [n+1], so we must update YawErr_filt and xhat_plane before computing the deflection
    dx = 0.0_ReKi
-   dy_HWkDfl = GetYawCorrection(xd%YawErr_filt(0), xd%xhat_plane(:,0), dx, p, errStat2, errMsg2)
-   call SetErrStat(ErrStat2, ErrMsg2, errStat, errMsg, RoutineName)   
-   if (errStat >= AbortErrLev) then
-      ! TEST: E3
-      call Cleanup()
-      return
-   end if
+   dy_HWkDfl = GetYawCorrection(xd%YawErr_filt(0), xd%xhat_plane(:,0), dx, p, errStat2, errMsg2); if(failed()) return
 
    ! Disk plane states filtered based on inputs
    xd%p_plane        (:,0) =  xd%p_plane(:,0)        *p%filtParam + ( u%p_hub(:) + dy_HWkDfl(:) )*p%oneMinusFiltParam
@@ -926,12 +906,7 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
    if (.not. p%Cartesian) then
       ! --- Polar
       ! Compute wake deficit of first plane based on rotor loading, outputs: Vx_Wake, m
-      call NearWakeCorrection( xd%Ct_azavg_filt, xd%Cq_azavg_filt, xd%Vx_rel_disk_filt, p, m, xd%Vx_wake(:,0), m%Vt_wake, xd%D_rotor_filt(0), errStat2, errMsg2 )
-      call SetErrStat(ErrStat2, ErrMsg2, errStat, errMsg, RoutineName)
-      if (errStat >= AbortErrLev) then
-         call Cleanup()
-         return
-      end if
+      call NearWakeCorrection( xd%Ct_azavg_filt, xd%Cq_azavg_filt, xd%Vx_rel_disk_filt, p, m, xd%Vx_wake(:,0), m%Vt_wake, xd%D_rotor_filt(0), errStat2, errMsg2 ); if(failed()) return
       m%Ct_avg =  get_Ctavg(p%r, xd%Ct_azavg_filt, xd%D_rotor_filt(0))
 
    else
@@ -943,12 +918,7 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
 
       ! --- Compute Vx
       ! Compute Vx(r)
-      call NearWakeCorrection( xd%Ct_azavg_filt, xd%Cq_azavg_filt, xd%Vx_rel_disk_filt, p, m, m%Vx_polar(:), m%Vt_wake, xd%D_rotor_filt(0), errStat2, errMsg2 )
-      call SetErrStat(ErrStat2, ErrMsg2, errStat, errMsg, RoutineName)
-      if (errStat >= AbortErrLev) then
-         call Cleanup()
-         return
-      end if
+      call NearWakeCorrection( xd%Ct_azavg_filt, xd%Cq_azavg_filt, xd%Vx_rel_disk_filt, p, m, m%Vx_polar(:), m%Vt_wake, xd%D_rotor_filt(0), errStat2, errMsg2 ); if(failed()) return
       ! Convert to Cartesian
       call Axisymmetric2CartesianVx(m%Vx_polar, p%r, p%y, p%z, xd%Vx_wake2(:,:,0))
       call FilterVx(xd%Vx_wake2(:,:,0), p%FilterInit) ! don't filter if FilterInit is 0
@@ -978,7 +948,7 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
    end if
    if ( NINT(xd%NumPlanes) < 2 ) then
       ! Check just in case following implementation plan; however, this should never happen. Consider removing in the future.
-      call SetErrStat(ErrID_Fatal, ' The number of wake planes of turbine '//trim(num2lstr(p%TurbNum))//' has dropped below 2. ', errStat, errMsg, RoutineName)
+      call Abort(' The number of wake planes of turbine '//trim(num2lstr(p%TurbNum))//' has dropped below 2. '); return
    end if
 
    maxPln = NINT(xd%NumPlanes) - 1
@@ -1045,7 +1015,7 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
 
    end do
 
-   call Cleanup()
+   call CleanUp()
    
 contains
 
@@ -1172,6 +1142,13 @@ contains
       enddo ! i, planes
 
    end subroutine updateVelocityCartesianFE
+
+
+   subroutine Abort(Message)
+      character(len=*), intent(in) :: Message
+      call SetErrStat( ErrID_Fatal, Message, errStat, errMsg, 'WD_UpdateStates')
+      call CleanUp()
+   end subroutine Abort
 
    logical function Failed()
       call SetErrStat(errStat2, errMsg2, errStat, errMsg, 'WD_UpdateStates') 
