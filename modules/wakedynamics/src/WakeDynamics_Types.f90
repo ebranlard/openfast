@@ -167,6 +167,19 @@ IMPLICIT NONE
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: Vt_wake      !< Vr as function of r for Cartesian implementation [-]
     REAL(ReKi)  :: GammaCurl = 0.0_ReKi      !< Circulation used in Curled wake model [-]
     REAL(ReKi)  :: Ct_avg = 0.0_ReKi      !< Circulation used in Curled wake model [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: SV_a      !< Value in diagonal matrix when solving for Vx [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: SV_b      !< Value in diagonal matrix when solving for Vx [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: SV_c      !< Value in diagonal matrix when solving for Vx [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: SV_d      !< Value in diagonal matrix when solving for Vx [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: SV_e      !< Value in diagonal matrix when solving for Vx [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: SV_f      !< Value in diagonal matrix when solving for Vx [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: SV_AA      !< A matrix in the linear system [-]
+    REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: SV_RHS      !< Right hand side in the linear system [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: SV_dVxdx      !< Source term in the Poisson equation [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: SV_dVxdx_fft      !< Source term in the Poisson equation after fft applied [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: SV_phi      !< Velocity potential in the Poisson equation [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: SV_phi_ext      !< Velocity potential in the extended domain [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: SV_phi_fft      !< Velocity potential after fft is applied [-]
   END TYPE WD_MiscVarType
 ! =======================
 ! =========  WD_ParameterType  =======
@@ -226,6 +239,9 @@ IMPLICIT NONE
     REAL(ReKi)  :: WAT_k_Grad_DMin = 0.0_ReKi      !< Calibrated parameter in the eddy viscosity filter function for the WAT radial velocity gradient of the wake deficit defining the transitional diameter fraction between the minimum and exponential regions [>=0.0] or DEFAULT [DEFAULT=0.0] [-]
     REAL(ReKi)  :: WAT_k_Grad_DMax = 0.0_ReKi      !< Calibrated parameter in the eddy viscosity filter function for the WAT radial velocity gradient of the wake deficit defining the transitional diameter fraction between the exponential and maximum regions [> WAT_k_Grad_DMin] or DEFAULT [DEFAULT=12.0] [-]
     REAL(ReKi)  :: WAT_k_Grad_Exp = 0.0_ReKi      !< Calibrated parameter in the eddy viscosity filter function for the WAT radial velocity gradient of the wake deficit defining the exponent in the exponential region [> 0.0] or DEFAULT [DEFAULT=0.65] [-]
+    REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: SV_y_ext      !< y-coordinate scaled to the padded domain size [m]
+    REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: SV_z_ext      !< z-cooddinate scaled to the padded doamin size [m]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: SV_G_fft      !< Discretized Green's function after FFT is applied [-]
   END TYPE WD_ParameterType
 ! =======================
 ! =========  WD_InputType  =======
@@ -242,6 +258,7 @@ IMPLICIT NONE
     REAL(ReKi)  :: Vx_rel_disk = 0.0_ReKi      !< Rotor-disk-averaged relative wind speed (ambient + deficits + motion), normal to disk [m/s]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: Ct_azavg      !< Azimuthally averaged thrust force coefficient (normal to disk), distributed radially [-]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: Cq_azavg      !< Azimuthally averaged torque coefficient (normal to disk), distributed radially [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: SV_Slopes      !< Slopes of U,V,W wrt y and z, dimension (np x 6) for each wake plane [1/s]
   END TYPE WD_InputType
 ! =======================
 ! =========  WD_OutputType  =======
@@ -272,17 +289,18 @@ IMPLICIT NONE
    integer(IntKi), public, parameter :: WD_u_Vx_rel_disk                 =  11 ! WD%Vx_rel_disk
    integer(IntKi), public, parameter :: WD_u_Ct_azavg                    =  12 ! WD%Ct_azavg
    integer(IntKi), public, parameter :: WD_u_Cq_azavg                    =  13 ! WD%Cq_azavg
-   integer(IntKi), public, parameter :: WD_y_NumPlanes                   =  14 ! WD%NumPlanes
-   integer(IntKi), public, parameter :: WD_y_xhat_plane                  =  15 ! WD%xhat_plane
-   integer(IntKi), public, parameter :: WD_y_p_plane                     =  16 ! WD%p_plane
-   integer(IntKi), public, parameter :: WD_y_Vx_wake                     =  17 ! WD%Vx_wake
-   integer(IntKi), public, parameter :: WD_y_Vr_wake                     =  18 ! WD%Vr_wake
-   integer(IntKi), public, parameter :: WD_y_Vx_wake2                    =  19 ! WD%Vx_wake2
-   integer(IntKi), public, parameter :: WD_y_Vy_wake2                    =  20 ! WD%Vy_wake2
-   integer(IntKi), public, parameter :: WD_y_Vz_wake2                    =  21 ! WD%Vz_wake2
-   integer(IntKi), public, parameter :: WD_y_D_wake                      =  22 ! WD%D_wake
-   integer(IntKi), public, parameter :: WD_y_x_plane                     =  23 ! WD%x_plane
-   integer(IntKi), public, parameter :: WD_y_WAT_k                       =  24 ! WD%WAT_k
+   integer(IntKi), public, parameter :: WD_u_SV_Slopes                   =  14 ! WD%SV_Slopes
+   integer(IntKi), public, parameter :: WD_y_NumPlanes                   =  15 ! WD%NumPlanes
+   integer(IntKi), public, parameter :: WD_y_xhat_plane                  =  16 ! WD%xhat_plane
+   integer(IntKi), public, parameter :: WD_y_p_plane                     =  17 ! WD%p_plane
+   integer(IntKi), public, parameter :: WD_y_Vx_wake                     =  18 ! WD%Vx_wake
+   integer(IntKi), public, parameter :: WD_y_Vr_wake                     =  19 ! WD%Vr_wake
+   integer(IntKi), public, parameter :: WD_y_Vx_wake2                    =  20 ! WD%Vx_wake2
+   integer(IntKi), public, parameter :: WD_y_Vy_wake2                    =  21 ! WD%Vy_wake2
+   integer(IntKi), public, parameter :: WD_y_Vz_wake2                    =  22 ! WD%Vz_wake2
+   integer(IntKi), public, parameter :: WD_y_D_wake                      =  23 ! WD%D_wake
+   integer(IntKi), public, parameter :: WD_y_x_plane                     =  24 ! WD%x_plane
+   integer(IntKi), public, parameter :: WD_y_WAT_k                       =  25 ! WD%WAT_k
 
 contains
 
@@ -1284,6 +1302,162 @@ subroutine WD_CopyMisc(SrcMiscData, DstMiscData, CtrlCode, ErrStat, ErrMsg)
    end if
    DstMiscData%GammaCurl = SrcMiscData%GammaCurl
    DstMiscData%Ct_avg = SrcMiscData%Ct_avg
+   if (allocated(SrcMiscData%SV_a)) then
+      LB(1:2) = lbound(SrcMiscData%SV_a)
+      UB(1:2) = ubound(SrcMiscData%SV_a)
+      if (.not. allocated(DstMiscData%SV_a)) then
+         allocate(DstMiscData%SV_a(LB(1):UB(1),LB(2):UB(2)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%SV_a.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstMiscData%SV_a = SrcMiscData%SV_a
+   end if
+   if (allocated(SrcMiscData%SV_b)) then
+      LB(1:2) = lbound(SrcMiscData%SV_b)
+      UB(1:2) = ubound(SrcMiscData%SV_b)
+      if (.not. allocated(DstMiscData%SV_b)) then
+         allocate(DstMiscData%SV_b(LB(1):UB(1),LB(2):UB(2)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%SV_b.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstMiscData%SV_b = SrcMiscData%SV_b
+   end if
+   if (allocated(SrcMiscData%SV_c)) then
+      LB(1:2) = lbound(SrcMiscData%SV_c)
+      UB(1:2) = ubound(SrcMiscData%SV_c)
+      if (.not. allocated(DstMiscData%SV_c)) then
+         allocate(DstMiscData%SV_c(LB(1):UB(1),LB(2):UB(2)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%SV_c.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstMiscData%SV_c = SrcMiscData%SV_c
+   end if
+   if (allocated(SrcMiscData%SV_d)) then
+      LB(1:2) = lbound(SrcMiscData%SV_d)
+      UB(1:2) = ubound(SrcMiscData%SV_d)
+      if (.not. allocated(DstMiscData%SV_d)) then
+         allocate(DstMiscData%SV_d(LB(1):UB(1),LB(2):UB(2)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%SV_d.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstMiscData%SV_d = SrcMiscData%SV_d
+   end if
+   if (allocated(SrcMiscData%SV_e)) then
+      LB(1:2) = lbound(SrcMiscData%SV_e)
+      UB(1:2) = ubound(SrcMiscData%SV_e)
+      if (.not. allocated(DstMiscData%SV_e)) then
+         allocate(DstMiscData%SV_e(LB(1):UB(1),LB(2):UB(2)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%SV_e.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstMiscData%SV_e = SrcMiscData%SV_e
+   end if
+   if (allocated(SrcMiscData%SV_f)) then
+      LB(1:2) = lbound(SrcMiscData%SV_f)
+      UB(1:2) = ubound(SrcMiscData%SV_f)
+      if (.not. allocated(DstMiscData%SV_f)) then
+         allocate(DstMiscData%SV_f(LB(1):UB(1),LB(2):UB(2)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%SV_f.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstMiscData%SV_f = SrcMiscData%SV_f
+   end if
+   if (allocated(SrcMiscData%SV_AA)) then
+      LB(1:2) = lbound(SrcMiscData%SV_AA)
+      UB(1:2) = ubound(SrcMiscData%SV_AA)
+      if (.not. allocated(DstMiscData%SV_AA)) then
+         allocate(DstMiscData%SV_AA(LB(1):UB(1),LB(2):UB(2)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%SV_AA.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstMiscData%SV_AA = SrcMiscData%SV_AA
+   end if
+   if (allocated(SrcMiscData%SV_RHS)) then
+      LB(1:1) = lbound(SrcMiscData%SV_RHS)
+      UB(1:1) = ubound(SrcMiscData%SV_RHS)
+      if (.not. allocated(DstMiscData%SV_RHS)) then
+         allocate(DstMiscData%SV_RHS(LB(1):UB(1)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%SV_RHS.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstMiscData%SV_RHS = SrcMiscData%SV_RHS
+   end if
+   if (allocated(SrcMiscData%SV_dVxdx)) then
+      LB(1:2) = lbound(SrcMiscData%SV_dVxdx)
+      UB(1:2) = ubound(SrcMiscData%SV_dVxdx)
+      if (.not. allocated(DstMiscData%SV_dVxdx)) then
+         allocate(DstMiscData%SV_dVxdx(LB(1):UB(1),LB(2):UB(2)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%SV_dVxdx.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstMiscData%SV_dVxdx = SrcMiscData%SV_dVxdx
+   end if
+   if (allocated(SrcMiscData%SV_dVxdx_fft)) then
+      LB(1:2) = lbound(SrcMiscData%SV_dVxdx_fft)
+      UB(1:2) = ubound(SrcMiscData%SV_dVxdx_fft)
+      if (.not. allocated(DstMiscData%SV_dVxdx_fft)) then
+         allocate(DstMiscData%SV_dVxdx_fft(LB(1):UB(1),LB(2):UB(2)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%SV_dVxdx_fft.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstMiscData%SV_dVxdx_fft = SrcMiscData%SV_dVxdx_fft
+   end if
+   if (allocated(SrcMiscData%SV_phi)) then
+      LB(1:2) = lbound(SrcMiscData%SV_phi)
+      UB(1:2) = ubound(SrcMiscData%SV_phi)
+      if (.not. allocated(DstMiscData%SV_phi)) then
+         allocate(DstMiscData%SV_phi(LB(1):UB(1),LB(2):UB(2)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%SV_phi.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstMiscData%SV_phi = SrcMiscData%SV_phi
+   end if
+   if (allocated(SrcMiscData%SV_phi_ext)) then
+      LB(1:2) = lbound(SrcMiscData%SV_phi_ext)
+      UB(1:2) = ubound(SrcMiscData%SV_phi_ext)
+      if (.not. allocated(DstMiscData%SV_phi_ext)) then
+         allocate(DstMiscData%SV_phi_ext(LB(1):UB(1),LB(2):UB(2)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%SV_phi_ext.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstMiscData%SV_phi_ext = SrcMiscData%SV_phi_ext
+   end if
+   if (allocated(SrcMiscData%SV_phi_fft)) then
+      LB(1:2) = lbound(SrcMiscData%SV_phi_fft)
+      UB(1:2) = ubound(SrcMiscData%SV_phi_fft)
+      if (.not. allocated(DstMiscData%SV_phi_fft)) then
+         allocate(DstMiscData%SV_phi_fft(LB(1):UB(1),LB(2):UB(2)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%SV_phi_fft.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstMiscData%SV_phi_fft = SrcMiscData%SV_phi_fft
+   end if
 end subroutine
 
 subroutine WD_DestroyMisc(MiscData, ErrStat, ErrMsg)
@@ -1356,6 +1530,45 @@ subroutine WD_DestroyMisc(MiscData, ErrStat, ErrMsg)
    if (allocated(MiscData%Vt_wake)) then
       deallocate(MiscData%Vt_wake)
    end if
+   if (allocated(MiscData%SV_a)) then
+      deallocate(MiscData%SV_a)
+   end if
+   if (allocated(MiscData%SV_b)) then
+      deallocate(MiscData%SV_b)
+   end if
+   if (allocated(MiscData%SV_c)) then
+      deallocate(MiscData%SV_c)
+   end if
+   if (allocated(MiscData%SV_d)) then
+      deallocate(MiscData%SV_d)
+   end if
+   if (allocated(MiscData%SV_e)) then
+      deallocate(MiscData%SV_e)
+   end if
+   if (allocated(MiscData%SV_f)) then
+      deallocate(MiscData%SV_f)
+   end if
+   if (allocated(MiscData%SV_AA)) then
+      deallocate(MiscData%SV_AA)
+   end if
+   if (allocated(MiscData%SV_RHS)) then
+      deallocate(MiscData%SV_RHS)
+   end if
+   if (allocated(MiscData%SV_dVxdx)) then
+      deallocate(MiscData%SV_dVxdx)
+   end if
+   if (allocated(MiscData%SV_dVxdx_fft)) then
+      deallocate(MiscData%SV_dVxdx_fft)
+   end if
+   if (allocated(MiscData%SV_phi)) then
+      deallocate(MiscData%SV_phi)
+   end if
+   if (allocated(MiscData%SV_phi_ext)) then
+      deallocate(MiscData%SV_phi_ext)
+   end if
+   if (allocated(MiscData%SV_phi_fft)) then
+      deallocate(MiscData%SV_phi_fft)
+   end if
 end subroutine
 
 subroutine WD_PackMisc(RF, Indata)
@@ -1386,6 +1599,19 @@ subroutine WD_PackMisc(RF, Indata)
    call RegPackAlloc(RF, InData%Vt_wake)
    call RegPack(RF, InData%GammaCurl)
    call RegPack(RF, InData%Ct_avg)
+   call RegPackAlloc(RF, InData%SV_a)
+   call RegPackAlloc(RF, InData%SV_b)
+   call RegPackAlloc(RF, InData%SV_c)
+   call RegPackAlloc(RF, InData%SV_d)
+   call RegPackAlloc(RF, InData%SV_e)
+   call RegPackAlloc(RF, InData%SV_f)
+   call RegPackAlloc(RF, InData%SV_AA)
+   call RegPackAlloc(RF, InData%SV_RHS)
+   call RegPackAlloc(RF, InData%SV_dVxdx)
+   call RegPackAlloc(RF, InData%SV_dVxdx_fft)
+   call RegPackAlloc(RF, InData%SV_phi)
+   call RegPackAlloc(RF, InData%SV_phi_ext)
+   call RegPackAlloc(RF, InData%SV_phi_fft)
    if (RegCheckErr(RF, RoutineName)) return
 end subroutine
 
@@ -1420,6 +1646,19 @@ subroutine WD_UnPackMisc(RF, OutData)
    call RegUnpackAlloc(RF, OutData%Vt_wake); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%GammaCurl); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%Ct_avg); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%SV_a); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%SV_b); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%SV_c); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%SV_d); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%SV_e); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%SV_f); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%SV_AA); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%SV_RHS); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%SV_dVxdx); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%SV_dVxdx_fft); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%SV_phi); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%SV_phi_ext); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%SV_phi_fft); if (RegCheckErr(RF, RoutineName)) return
 end subroutine
 
 subroutine WD_CopyParam(SrcParamData, DstParamData, CtrlCode, ErrStat, ErrMsg)
@@ -1428,7 +1667,7 @@ subroutine WD_CopyParam(SrcParamData, DstParamData, CtrlCode, ErrStat, ErrMsg)
    integer(IntKi),  intent(in   ) :: CtrlCode
    integer(IntKi),  intent(  out) :: ErrStat
    character(*),    intent(  out) :: ErrMsg
-   integer(B4Ki)                  :: LB(1), UB(1)
+   integer(B4Ki)                  :: LB(2), UB(2)
    integer(IntKi)                 :: ErrStat2
    character(*), parameter        :: RoutineName = 'WD_CopyParam'
    ErrStat = ErrID_None
@@ -1521,6 +1760,42 @@ subroutine WD_CopyParam(SrcParamData, DstParamData, CtrlCode, ErrStat, ErrMsg)
    DstParamData%WAT_k_Grad_DMin = SrcParamData%WAT_k_Grad_DMin
    DstParamData%WAT_k_Grad_DMax = SrcParamData%WAT_k_Grad_DMax
    DstParamData%WAT_k_Grad_Exp = SrcParamData%WAT_k_Grad_Exp
+   if (allocated(SrcParamData%SV_y_ext)) then
+      LB(1:1) = lbound(SrcParamData%SV_y_ext)
+      UB(1:1) = ubound(SrcParamData%SV_y_ext)
+      if (.not. allocated(DstParamData%SV_y_ext)) then
+         allocate(DstParamData%SV_y_ext(LB(1):UB(1)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstParamData%SV_y_ext.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstParamData%SV_y_ext = SrcParamData%SV_y_ext
+   end if
+   if (allocated(SrcParamData%SV_z_ext)) then
+      LB(1:1) = lbound(SrcParamData%SV_z_ext)
+      UB(1:1) = ubound(SrcParamData%SV_z_ext)
+      if (.not. allocated(DstParamData%SV_z_ext)) then
+         allocate(DstParamData%SV_z_ext(LB(1):UB(1)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstParamData%SV_z_ext.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstParamData%SV_z_ext = SrcParamData%SV_z_ext
+   end if
+   if (allocated(SrcParamData%SV_G_fft)) then
+      LB(1:2) = lbound(SrcParamData%SV_G_fft)
+      UB(1:2) = ubound(SrcParamData%SV_G_fft)
+      if (.not. allocated(DstParamData%SV_G_fft)) then
+         allocate(DstParamData%SV_G_fft(LB(1):UB(1),LB(2):UB(2)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstParamData%SV_G_fft.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstParamData%SV_G_fft = SrcParamData%SV_G_fft
+   end if
 end subroutine
 
 subroutine WD_DestroyParam(ParamData, ErrStat, ErrMsg)
@@ -1538,6 +1813,15 @@ subroutine WD_DestroyParam(ParamData, ErrStat, ErrMsg)
    end if
    if (allocated(ParamData%z)) then
       deallocate(ParamData%z)
+   end if
+   if (allocated(ParamData%SV_y_ext)) then
+      deallocate(ParamData%SV_y_ext)
+   end if
+   if (allocated(ParamData%SV_z_ext)) then
+      deallocate(ParamData%SV_z_ext)
+   end if
+   if (allocated(ParamData%SV_G_fft)) then
+      deallocate(ParamData%SV_G_fft)
    end if
 end subroutine
 
@@ -1601,6 +1885,9 @@ subroutine WD_PackParam(RF, Indata)
    call RegPack(RF, InData%WAT_k_Grad_DMin)
    call RegPack(RF, InData%WAT_k_Grad_DMax)
    call RegPack(RF, InData%WAT_k_Grad_Exp)
+   call RegPackAlloc(RF, InData%SV_y_ext)
+   call RegPackAlloc(RF, InData%SV_z_ext)
+   call RegPackAlloc(RF, InData%SV_G_fft)
    if (RegCheckErr(RF, RoutineName)) return
 end subroutine
 
@@ -1608,7 +1895,7 @@ subroutine WD_UnPackParam(RF, OutData)
    type(RegFile), intent(inout)    :: RF
    type(WD_ParameterType), intent(inout) :: OutData
    character(*), parameter            :: RoutineName = 'WD_UnPackParam'
-   integer(B4Ki)   :: LB(1), UB(1)
+   integer(B4Ki)   :: LB(2), UB(2)
    integer(IntKi)  :: stat
    logical         :: IsAllocAssoc
    if (RF%ErrStat /= ErrID_None) return
@@ -1667,6 +1954,9 @@ subroutine WD_UnPackParam(RF, OutData)
    call RegUnpack(RF, OutData%WAT_k_Grad_DMin); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%WAT_k_Grad_DMax); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%WAT_k_Grad_Exp); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%SV_y_ext); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%SV_z_ext); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%SV_G_fft); if (RegCheckErr(RF, RoutineName)) return
 end subroutine
 
 subroutine WD_CopyInput(SrcInputData, DstInputData, CtrlCode, ErrStat, ErrMsg)
@@ -1725,6 +2015,18 @@ subroutine WD_CopyInput(SrcInputData, DstInputData, CtrlCode, ErrStat, ErrMsg)
       end if
       DstInputData%Cq_azavg = SrcInputData%Cq_azavg
    end if
+   if (allocated(SrcInputData%SV_Slopes)) then
+      LB(1:2) = lbound(SrcInputData%SV_Slopes)
+      UB(1:2) = ubound(SrcInputData%SV_Slopes)
+      if (.not. allocated(DstInputData%SV_Slopes)) then
+         allocate(DstInputData%SV_Slopes(LB(1):UB(1),LB(2):UB(2)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstInputData%SV_Slopes.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstInputData%SV_Slopes = SrcInputData%SV_Slopes
+   end if
 end subroutine
 
 subroutine WD_DestroyInput(InputData, ErrStat, ErrMsg)
@@ -1742,6 +2044,9 @@ subroutine WD_DestroyInput(InputData, ErrStat, ErrMsg)
    end if
    if (allocated(InputData%Cq_azavg)) then
       deallocate(InputData%Cq_azavg)
+   end if
+   if (allocated(InputData%SV_Slopes)) then
+      deallocate(InputData%SV_Slopes)
    end if
 end subroutine
 
@@ -1762,6 +2067,7 @@ subroutine WD_PackInput(RF, Indata)
    call RegPack(RF, InData%Vx_rel_disk)
    call RegPackAlloc(RF, InData%Ct_azavg)
    call RegPackAlloc(RF, InData%Cq_azavg)
+   call RegPackAlloc(RF, InData%SV_Slopes)
    if (RegCheckErr(RF, RoutineName)) return
 end subroutine
 
@@ -1785,6 +2091,7 @@ subroutine WD_UnPackInput(RF, OutData)
    call RegUnpack(RF, OutData%Vx_rel_disk); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpackAlloc(RF, OutData%Ct_azavg); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpackAlloc(RF, OutData%Cq_azavg); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%SV_Slopes); if (RegCheckErr(RF, RoutineName)) return
 end subroutine
 
 subroutine WD_CopyOutput(SrcOutputData, DstOutputData, CtrlCode, ErrStat, ErrMsg)
@@ -2139,6 +2446,8 @@ subroutine WD_VarPackInput(V, u, ValAry)
          VarVals = u%Ct_azavg(V%iLB:V%iUB)                                    ! Rank 1 Array
       case (WD_u_Cq_azavg)
          VarVals = u%Cq_azavg(V%iLB:V%iUB)                                    ! Rank 1 Array
+      case (WD_u_SV_Slopes)
+         VarVals = u%SV_Slopes(V%iLB:V%iUB,V%j)                               ! Rank 2 Array
       case default
          VarVals = 0.0_R8Ki
       end select
@@ -2185,6 +2494,8 @@ subroutine WD_VarUnpackInput(V, ValAry, u)
          u%Ct_azavg(V%iLB:V%iUB) = VarVals                                    ! Rank 1 Array
       case (WD_u_Cq_azavg)
          u%Cq_azavg(V%iLB:V%iUB) = VarVals                                    ! Rank 1 Array
+      case (WD_u_SV_Slopes)
+         u%SV_Slopes(V%iLB:V%iUB, V%j) = VarVals                              ! Rank 2 Array
       end select
    end associate
 end subroutine
@@ -2217,6 +2528,8 @@ function WD_InputFieldName(DL) result(Name)
        Name = "u%Ct_azavg"
    case (WD_u_Cq_azavg)
        Name = "u%Cq_azavg"
+   case (WD_u_SV_Slopes)
+       Name = "u%SV_Slopes"
    case default
        Name = "Unknown Field"
    end select

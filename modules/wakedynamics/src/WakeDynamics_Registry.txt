@@ -143,6 +143,20 @@ typedef   ^         MiscVarType   ReKi  Vx_polar {:}    - -  "Vx as function of 
 typedef   ^         MiscVarType   ReKi  Vt_wake {:}    - -   "Vr as function of r for Cartesian implementation"    
 typedef   ^         MiscVarType   ReKi  GammaCurl  -   - -   "Circulation used in Curled wake model"     
 typedef   ^         MiscVarType   ReKi  Ct_avg     -   - -   "Circulation used in Curled wake model"     
+# ShearVeer (SV) misc
+typedef   ^         MiscVarType   ReKi  SV_a         {:}{:}   -    -   "Value in diagonal matrix when solving for Vx"      
+typedef   ^         MiscVarType   ReKi  SV_b         {:}{:}   -    -   "Value in diagonal matrix when solving for Vx"     
+typedef   ^         MiscVarType   ReKi  SV_c         {:}{:}   -    -   "Value in diagonal matrix when solving for Vx"     
+typedef   ^         MiscVarType   ReKi  SV_d         {:}{:}   -    -   "Value in diagonal matrix when solving for Vx"     
+typedef   ^         MiscVarType   ReKi  SV_e         {:}{:}   -    -   "Value in diagonal matrix when solving for Vx"     
+typedef   ^         MiscVarType   ReKi  SV_f         {:}{:}   -    -   "Value in diagonal matrix when solving for Vx"     
+typedef   ^         MiscVarType   ReKi  SV_AA        {:}{:}   -    -   "A matrix in the linear system"     
+typedef   ^         MiscVarType   ReKi  SV_RHS       {:}      -    -   "Right hand side in the linear system"     
+typedef   ^         MiscVarType   ReKi  SV_dVxdx     {:}{:}   -    -   "Source term in the Poisson equation" 
+typedef   ^         MiscVarType   ReKi  SV_dVxdx_fft {:}{:}   -    -   "Source term in the Poisson equation after fft applied" 
+typedef   ^         MiscVarType   ReKi  SV_phi       {:}{:}   -    -   "Velocity potential in the Poisson equation" 
+typedef   ^         MiscVarType   ReKi  SV_phi_ext   {:}{:}   -    -   "Velocity potential in the extended domain" 
+typedef   ^         MiscVarType   ReKi  SV_phi_fft   {:}{:}   -    -   "Velocity potential after fft is applied" 
 
 
 # ..... Parameters ................................................................................................................
@@ -206,6 +220,11 @@ typedef  ^ ParameterType  ReKi            WAT_k_Grad_FMin - - -  "Calibrated par
 typedef  ^ ParameterType  ReKi            WAT_k_Grad_DMin - - -  "Calibrated parameter in the eddy viscosity filter function for the WAT radial velocity gradient of the wake deficit defining the transitional diameter fraction between the minimum and exponential regions [>=0.0] or DEFAULT [DEFAULT=0.0]" -
 typedef  ^ ParameterType  ReKi            WAT_k_Grad_DMax - - -  "Calibrated parameter in the eddy viscosity filter function for the WAT radial velocity gradient of the wake deficit defining the transitional diameter fraction between the exponential and maximum regions [> WAT_k_Grad_DMin] or DEFAULT [DEFAULT=12.0]" -
 typedef  ^ ParameterType  ReKi            WAT_k_Grad_Exp  - - -  "Calibrated parameter in the eddy viscosity filter function for the WAT radial velocity gradient of the wake deficit defining the exponent in the exponential region [> 0.0] or DEFAULT [DEFAULT=0.65]" -
+# ShearVeer (SV) parameters
+typedef  ^ ParameterType  ReKi            SV_y_ext      {:} - -  "y-coordinate scaled to the padded domain size" m
+typedef  ^ ParameterType  ReKi            SV_z_ext      {:} - -  "z-cooddinate scaled to the padded doamin size" m
+typedef  ^ ParameterType  ReKi            SV_G_fft   {:}{:} - -  "Discretized Green's function after FFT is applied" -
+
 # ..... Inputs ....................................................................................................................
 # Define inputs that are contained on the mesh here:
 typedef      ^      InputType          ReKi       xhat_disk            {3}     -      -      "Orientation of rotor centerline, normal to disk"      -
@@ -220,6 +239,7 @@ typedef      ^      InputType          ReKi       D_rotor               -      -
 typedef      ^      InputType          ReKi       Vx_rel_disk           -      -      -      "Rotor-disk-averaged relative wind speed (ambient + deficits + motion), normal to disk"      m/s
 typedef      ^      InputType          ReKi       Ct_azavg             {:}     -      -      "Azimuthally averaged thrust force coefficient (normal to disk), distributed radially"      -
 typedef      ^      InputType          ReKi       Cq_azavg             {:}     -      -      "Azimuthally averaged torque coefficient (normal to disk), distributed radially"      -
+typedef      ^      InputType          ReKi       SV_Slopes            {:}{:}  -      -      "Slopes of U,V,W wrt y and z, dimension (np x 6) for each wake plane"      1/s
 
 
 # ..... Outputs ...................................................................................................................
