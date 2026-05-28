@@ -505,6 +505,10 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
    allocate( u%Ct_azavg      (  0:p%NumRadii-1 ),stat=errStat2);  if (Failed0('u%Ct_azavg.')) return;
    allocate( u%Cq_azavg      (  0:p%NumRadii-1 ),stat=errStat2);  if (Failed0('u%Cq_azavg.')) return;
    if (errStat /= ErrID_None) return
+
+   if (p%ShearVeer) then
+      allocate( u%SV_Slopes(6, 0:p%MaxNumPlanes-1), stat=errStat2);  if (Failed0('u%SV_Slopes.' )) return;
+   endif
    
 
          
