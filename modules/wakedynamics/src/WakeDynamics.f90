@@ -604,8 +604,18 @@ subroutine WD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
    allocate (    m%Vx_high(0:p%NumRadii-1 ),  STAT=ErrStat2 );  if (Failed0('m%Vx_high.' )) return;
    allocate (    m%Vt_wake(0:p%NumRadii-1 ),  STAT=ErrStat2 );  if (Failed0('m%Vx_high.' )) return;
    allocate (    m%Vx_polar(0:p%NumRadii-1 ), STAT=ErrStat2 );  if (Failed0('m%Vx_polar.')) return;
+   
+   ! Allocated 3d but should be 2d
+   allocate (   m%dnu_dy  (-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1,0:p%MaxNumPlanes-1), STAT=ErrStat2 );  if (Failed0('m%dnu_dy.')) return;
+   allocate (   m%dnu_dz  (-p%NumRadii+1:p%NumRadii-1,-p%NumRadii+1:p%NumRadii-1,0:p%MaxNumPlanes-1), STAT=ErrStat2 );  if (Failed0('m%dnu_dz.')) return;
+
    m%Vx_polar = 0.0_ReKi
    m%Vt_wake = 0.0_ReKi
+
+   ! same here, they can be assigned only if cartesian
+   m%dnu_dy   = 0.0_ReKi
+   m%dnu_dz   = 0.0_ReKi
+
       !............................................................................................
       ! Define initialization output here
       !............................................................................................
@@ -1101,40 +1111,88 @@ contains
    end subroutine updateVelocityCartesianFD
 
    !> 
+   ! ONly used with curl before
    subroutine updateVelocityCartesianFE()
       integer(intKi) :: iy,iz,i
       real(ReKi)  :: dx
       real(ReKi)  :: xp !< x position of the plane
       real(ReKi)  :: divTau  
+      real(ReKi) :: SyU, SzU, SyV, SzV, SyW, SzW
+      real(ReKi) :: UU, VV, WW
       divTau =0.0_ReKi
 
       ! This is the formulation of curled wake algorithm (Martinez et al WES 2019)
       ! The quantities in these loops are all at time [n], so we need to compute prior to updating the states to [n+1] (loop in reversed)
       do i = maxPln, 1, -1  
 
+         ! offload the slopes here
+         !SyU = u%SV_Slopes(1,i-1)
+         !SzU = u%SV_Slopes(2,i-1)
+
+         !SyV = u%SV_Slopes(3,i-1)
+         !SzV = u%SV_Slopes(4,i-1)
+
+         !SyW = u%SV_Slopes(5,i-1)
+         !SzW = u%SV_Slopes(6,i-1)
+
+         SyU = 0.0_ReKi
+         SzU = 0.0_ReKi
+         SyV = 0.0_ReKi
+         SzV = 0.0_ReKi
+         SyW = 0.0_ReKi
+         SzW = 0.0_ReKi
+
          ! NOTE: we cannot use data at i here since positions of planes have not been updated yet
          dx = abs(dot_product(xd%xhat_plane(:,i-1),xd%V_plane_filt(:,i-1))*p%DT_low)
          !xp = xd%p_plane(1,i-1)/u%D_rotor ! Current plane downstream x position in D
          xp = (xd%x_plane(i-1) + abs(dx))/u%D_rotor 
 
-         ! Gradients for eddy viscosity term 
-         ! NOTE: the gradient of Vx have been computed for the eddy viscosity already
+         !---------------------------------------------------------------
+         ! Gradients needed for expanded eddy-viscosity formulation
+         !---------------------------------------------------------------
+         
          m%nu_dvx_dy(:,:) = m%vt_tot2(:,:,i-1) * m%dvx_dy(:,:,i-1)
          m%nu_dvx_dz(:,:) = m%vt_tot2(:,:,i-1) * m%dvx_dz(:,:,i-1)
          call gradient_y(m%nu_dvx_dy, p%dr, m%dnuvx_dy )
          call gradient_z(m%nu_dvx_dz, p%dr, m%dnuvx_dz )
 
+         ! d(nu)/dy and d(nu)/dz
+         call gradient_y( m%vt_tot2(:,:,i-1), p%dr, m%dnu_dy(:,:,i-1) )
+         call gradient_z( m%vt_tot2(:,:,i-1), p%dr, m%dnu_dz(:,:,i-1) )
+
+         ! d²Vx/dy² and d²Vx/dz²
+         ! call gradient_y( m%dvx_dy(:,:,i-1), p%dr, m%d2vx_dy2(:,:,i-1) )
+         ! call gradient_z( m%dvx_dz(:,:,i-1), p%dr, m%d2vx_dz2(:,:,i-1) )
+
          ! Loop through all the points on the plane (y, z)
          do iz = -p%NumRadii+2, p%NumRadii-2
             do iy = -p%NumRadii+2, p%NumRadii-2
+               !UU = U0 + SyU*y(iy) + SzU*z(iz)
+               VV = SyV*p%y(iy) + SzV*p%z(iz) !p%y(iy)
+               WW = SyW*p%y(iy) + SzW*p%z(iz)
 
                ! Eddy viscosity term
-               divTau = m%dnuvx_dy(iy,iz) + m%dnuvx_dz(iy,iz)
+
+               divTau = m%dnuvx_dy(iy,iz) + m%dnuvx_dz(iy,iz) &
+                  + m%dnu_dy(iy,iz,i-1) * SyU &
+                  + m%dnu_dz(iy,iz,i-1) * SzU
+
+               ! For documentation:
+               ! divTau = &
+               !   m%dnu_dy(iy,iz,i-1) * SyU                                    &
+               !   + m%dnu_dy(iy,iz,i-1) * m%dvx_dy(iy,iz,i-1)                    &
+               !   + m%vt_tot2(iy,iz,i-1) * m%d2vx_dy2(iy,iz,i-1)                 &
+               !   + m%dnu_dz(iy,iz,i-1) * SzU                                    &
+               !   + m%dnu_dz(iy,iz,i-1) * m%dvx_dz(iy,iz,i-1)                    &
+               !   + m%vt_tot2(iy,iz,i-1) * m%d2vx_dz2(iy,iz,i-1)
+
+
+                  ! implement compact one
                ! Update state of Vx
                xd%Vx_wake2(iy,iz,i) = xd%Vx_wake2(iy,iz,i-1) -  &
                       p%DT_low * ( & 
-                                         ( (xd%Vy_wake2(iy,iz,i-1) ) * m%dvx_dy(iy,iz,i-1) + &
-                                           (xd%Vz_wake2(iy,iz,i-1) ) * m%dvx_dz(iy,iz,i-1) &
+                                         ( (VV + xd%Vy_wake2(iy,iz,i-1)) * SyU + (VV + xd%Vy_wake2(iy,iz,i-1) ) * m%dvx_dy(iy,iz,i-1) + &
+                                           (WW + xd%Vz_wake2(iy,iz,i-1)) * SZU + (WW + xd%Vz_wake2(iy,iz,i-1) ) * m%dvx_dz(iy,iz,i-1) &
                                          - divTau) &
                                          ) 
                ! Update state (decay) of Vy and Vz

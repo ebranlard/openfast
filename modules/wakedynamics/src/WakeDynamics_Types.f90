@@ -155,6 +155,8 @@ IMPLICIT NONE
     REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: dvx_dz      !< Cartesian velocity gradient dVx/dz [-]
     REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: nu_dvx_dy      !< Product of total eddy viscosity and gradient [-]
     REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: nu_dvx_dz      !< Product of total eddy viscosity and gradient [-]
+    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: dnu_dy      !< eddy viscosity gradient dnu/dy [-]
+    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: dnu_dz      !< eddy viscosity gradient dnu/dz [-]
     REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: dnuvx_dy      !< Gradient of nu_dvx_dy wrt y [-]
     REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: dnuvx_dz      !< Gradient of nu_dvx_dz wrt z [-]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: a      !<  [-]
@@ -1180,6 +1182,30 @@ subroutine WD_CopyMisc(SrcMiscData, DstMiscData, CtrlCode, ErrStat, ErrMsg)
       end if
       DstMiscData%nu_dvx_dz = SrcMiscData%nu_dvx_dz
    end if
+   if (allocated(SrcMiscData%dnu_dy)) then
+      LB(1:3) = lbound(SrcMiscData%dnu_dy)
+      UB(1:3) = ubound(SrcMiscData%dnu_dy)
+      if (.not. allocated(DstMiscData%dnu_dy)) then
+         allocate(DstMiscData%dnu_dy(LB(1):UB(1),LB(2):UB(2),LB(3):UB(3)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%dnu_dy.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstMiscData%dnu_dy = SrcMiscData%dnu_dy
+   end if
+   if (allocated(SrcMiscData%dnu_dz)) then
+      LB(1:3) = lbound(SrcMiscData%dnu_dz)
+      UB(1:3) = ubound(SrcMiscData%dnu_dz)
+      if (.not. allocated(DstMiscData%dnu_dz)) then
+         allocate(DstMiscData%dnu_dz(LB(1):UB(1),LB(2):UB(2),LB(3):UB(3)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%dnu_dz.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstMiscData%dnu_dz = SrcMiscData%dnu_dz
+   end if
    if (allocated(SrcMiscData%dnuvx_dy)) then
       LB(1:2) = lbound(SrcMiscData%dnuvx_dy)
       UB(1:2) = ubound(SrcMiscData%dnuvx_dy)
@@ -1500,6 +1526,12 @@ subroutine WD_DestroyMisc(MiscData, ErrStat, ErrMsg)
    if (allocated(MiscData%nu_dvx_dz)) then
       deallocate(MiscData%nu_dvx_dz)
    end if
+   if (allocated(MiscData%dnu_dy)) then
+      deallocate(MiscData%dnu_dy)
+   end if
+   if (allocated(MiscData%dnu_dz)) then
+      deallocate(MiscData%dnu_dz)
+   end if
    if (allocated(MiscData%dnuvx_dy)) then
       deallocate(MiscData%dnuvx_dy)
    end if
@@ -1587,6 +1619,8 @@ subroutine WD_PackMisc(RF, Indata)
    call RegPackAlloc(RF, InData%dvx_dz)
    call RegPackAlloc(RF, InData%nu_dvx_dy)
    call RegPackAlloc(RF, InData%nu_dvx_dz)
+   call RegPackAlloc(RF, InData%dnu_dy)
+   call RegPackAlloc(RF, InData%dnu_dz)
    call RegPackAlloc(RF, InData%dnuvx_dy)
    call RegPackAlloc(RF, InData%dnuvx_dz)
    call RegPackAlloc(RF, InData%a)
@@ -1634,6 +1668,8 @@ subroutine WD_UnPackMisc(RF, OutData)
    call RegUnpackAlloc(RF, OutData%dvx_dz); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpackAlloc(RF, OutData%nu_dvx_dy); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpackAlloc(RF, OutData%nu_dvx_dz); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%dnu_dy); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%dnu_dz); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpackAlloc(RF, OutData%dnuvx_dy); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpackAlloc(RF, OutData%dnuvx_dz); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpackAlloc(RF, OutData%a); if (RegCheckErr(RF, RoutineName)) return
