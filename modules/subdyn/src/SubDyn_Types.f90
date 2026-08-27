@@ -46,9 +46,9 @@ IMPLICIT NONE
     INTEGER(IntKi) , DIMENSION(:), ALLOCATABLE  :: NodeIDs      !< Node IDs associated with ordinal numbers for the output member [-]
     INTEGER(IntKi) , DIMENSION(:,:), ALLOCATABLE  :: ElmIDs      !< Element IDs connected to each NodeIDs; max 10 elements [-]
     INTEGER(IntKi) , DIMENSION(:,:), ALLOCATABLE  :: ElmNds      !< Flag to indicate 1st or 2nd node of element for each ElmIDs [-]
-    REAL(R8Ki) , DIMENSION(:,:,:,:), ALLOCATABLE  :: Me      !< Mass matrix connected to each joint element for outAll output [-]
     REAL(R8Ki) , DIMENSION(:,:,:,:), ALLOCATABLE  :: Ke      !< Mass matrix connected to each joint element for outAll output [-]
     REAL(R8Ki) , DIMENSION(:,:,:), ALLOCATABLE  :: Fg      !< Gravity load vector connected to each joint element for requested member output [-]
+    LOGICAL , DIMENSION(:), ALLOCATABLE  :: extrap      !< Whether to extrapolate force; true for member end nodes if member has more than 1 element [-]
   END TYPE MeshAuxDataType
 ! =======================
 ! =========  CB_MatArrays  =======
@@ -168,6 +168,9 @@ IMPLICIT NONE
     REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: GuyanDampMat      !< Guyan Damping Matrix, see also CBB [-]
     INTEGER(IntKi) , DIMENSION(:,:), ALLOCATABLE  :: Members      !< Member joints connection           [-]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: MemberSpin      !< Member spin angle about its axis - for rectangular members  [rad]
+    REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: MemberDivSize      !< Optional maximum element length for each member [m]
+    INTEGER(IntKi) , DIMENSION(:), ALLOCATABLE  :: MemberNDiv      !< Resolved number of finite elements per member [-]
+   INTEGER(IntKi) , DIMENSION(:), ALLOCATABLE  :: MemberElemStart      !< First element index for each member in p%Elems [-]
     CHARACTER(ChanLen) , DIMENSION(:), ALLOCATABLE  :: SSOutList      !< List of Output Channels            [-]
     LOGICAL  :: OutCOSM = .false.      !< Output Cos-matrices Flag           [-]
     LOGICAL  :: TabDelim = .false.      !< Generate a tab-delimited output file in OutJckF-Flag                        [-]
@@ -546,18 +549,6 @@ subroutine SD_CopyMeshAuxDataType(SrcMeshAuxDataTypeData, DstMeshAuxDataTypeData
       end if
       DstMeshAuxDataTypeData%ElmNds = SrcMeshAuxDataTypeData%ElmNds
    end if
-   if (allocated(SrcMeshAuxDataTypeData%Me)) then
-      LB(1:4) = lbound(SrcMeshAuxDataTypeData%Me)
-      UB(1:4) = ubound(SrcMeshAuxDataTypeData%Me)
-      if (.not. allocated(DstMeshAuxDataTypeData%Me)) then
-         allocate(DstMeshAuxDataTypeData%Me(LB(1):UB(1),LB(2):UB(2),LB(3):UB(3),LB(4):UB(4)), stat=ErrStat2)
-         if (ErrStat2 /= 0) then
-            call SetErrStat(ErrID_Fatal, 'Error allocating DstMeshAuxDataTypeData%Me.', ErrStat, ErrMsg, RoutineName)
-            return
-         end if
-      end if
-      DstMeshAuxDataTypeData%Me = SrcMeshAuxDataTypeData%Me
-   end if
    if (allocated(SrcMeshAuxDataTypeData%Ke)) then
       LB(1:4) = lbound(SrcMeshAuxDataTypeData%Ke)
       UB(1:4) = ubound(SrcMeshAuxDataTypeData%Ke)
@@ -582,6 +573,18 @@ subroutine SD_CopyMeshAuxDataType(SrcMeshAuxDataTypeData, DstMeshAuxDataTypeData
       end if
       DstMeshAuxDataTypeData%Fg = SrcMeshAuxDataTypeData%Fg
    end if
+   if (allocated(SrcMeshAuxDataTypeData%extrap)) then
+      LB(1:1) = lbound(SrcMeshAuxDataTypeData%extrap)
+      UB(1:1) = ubound(SrcMeshAuxDataTypeData%extrap)
+      if (.not. allocated(DstMeshAuxDataTypeData%extrap)) then
+         allocate(DstMeshAuxDataTypeData%extrap(LB(1):UB(1)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstMeshAuxDataTypeData%extrap.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstMeshAuxDataTypeData%extrap = SrcMeshAuxDataTypeData%extrap
+   end if
 end subroutine
 
 subroutine SD_DestroyMeshAuxDataType(MeshAuxDataTypeData, ErrStat, ErrMsg)
@@ -603,14 +606,14 @@ subroutine SD_DestroyMeshAuxDataType(MeshAuxDataTypeData, ErrStat, ErrMsg)
    if (allocated(MeshAuxDataTypeData%ElmNds)) then
       deallocate(MeshAuxDataTypeData%ElmNds)
    end if
-   if (allocated(MeshAuxDataTypeData%Me)) then
-      deallocate(MeshAuxDataTypeData%Me)
-   end if
    if (allocated(MeshAuxDataTypeData%Ke)) then
       deallocate(MeshAuxDataTypeData%Ke)
    end if
    if (allocated(MeshAuxDataTypeData%Fg)) then
       deallocate(MeshAuxDataTypeData%Fg)
+   end if
+   if (allocated(MeshAuxDataTypeData%extrap)) then
+      deallocate(MeshAuxDataTypeData%extrap)
    end if
 end subroutine
 
@@ -625,9 +628,9 @@ subroutine SD_PackMeshAuxDataType(RF, Indata)
    call RegPackAlloc(RF, InData%NodeIDs)
    call RegPackAlloc(RF, InData%ElmIDs)
    call RegPackAlloc(RF, InData%ElmNds)
-   call RegPackAlloc(RF, InData%Me)
    call RegPackAlloc(RF, InData%Ke)
    call RegPackAlloc(RF, InData%Fg)
+   call RegPackAlloc(RF, InData%extrap)
    if (RegCheckErr(RF, RoutineName)) return
 end subroutine
 
@@ -645,9 +648,9 @@ subroutine SD_UnPackMeshAuxDataType(RF, OutData)
    call RegUnpackAlloc(RF, OutData%NodeIDs); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpackAlloc(RF, OutData%ElmIDs); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpackAlloc(RF, OutData%ElmNds); if (RegCheckErr(RF, RoutineName)) return
-   call RegUnpackAlloc(RF, OutData%Me); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpackAlloc(RF, OutData%Ke); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpackAlloc(RF, OutData%Fg); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%extrap); if (RegCheckErr(RF, RoutineName)) return
 end subroutine
 
 subroutine SD_CopyCB_MatArrays(SrcCB_MatArraysData, DstCB_MatArraysData, CtrlCode, ErrStat, ErrMsg)
@@ -1369,6 +1372,42 @@ subroutine SD_CopyInitType(SrcInitTypeData, DstInitTypeData, CtrlCode, ErrStat, 
       end if
       DstInitTypeData%MemberSpin = SrcInitTypeData%MemberSpin
    end if
+   if (allocated(SrcInitTypeData%MemberDivSize)) then
+      LB(1:1) = lbound(SrcInitTypeData%MemberDivSize)
+      UB(1:1) = ubound(SrcInitTypeData%MemberDivSize)
+      if (.not. allocated(DstInitTypeData%MemberDivSize)) then
+         allocate(DstInitTypeData%MemberDivSize(LB(1):UB(1)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstInitTypeData%MemberDivSize.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstInitTypeData%MemberDivSize = SrcInitTypeData%MemberDivSize
+   end if
+   if (allocated(SrcInitTypeData%MemberNDiv)) then
+      LB(1:1) = lbound(SrcInitTypeData%MemberNDiv)
+      UB(1:1) = ubound(SrcInitTypeData%MemberNDiv)
+      if (.not. allocated(DstInitTypeData%MemberNDiv)) then
+         allocate(DstInitTypeData%MemberNDiv(LB(1):UB(1)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstInitTypeData%MemberNDiv.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstInitTypeData%MemberNDiv = SrcInitTypeData%MemberNDiv
+   end if
+   if (allocated(SrcInitTypeData%MemberElemStart)) then
+      LB(1:1) = lbound(SrcInitTypeData%MemberElemStart)
+      UB(1:1) = ubound(SrcInitTypeData%MemberElemStart)
+      if (.not. allocated(DstInitTypeData%MemberElemStart)) then
+         allocate(DstInitTypeData%MemberElemStart(LB(1):UB(1)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstInitTypeData%MemberElemStart.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstInitTypeData%MemberElemStart = SrcInitTypeData%MemberElemStart
+   end if
    if (allocated(SrcInitTypeData%SSOutList)) then
       LB(1:1) = lbound(SrcInitTypeData%SSOutList)
       UB(1:1) = ubound(SrcInitTypeData%SSOutList)
@@ -1659,6 +1698,15 @@ subroutine SD_DestroyInitType(InitTypeData, ErrStat, ErrMsg)
    if (allocated(InitTypeData%MemberSpin)) then
       deallocate(InitTypeData%MemberSpin)
    end if
+   if (allocated(InitTypeData%MemberDivSize)) then
+      deallocate(InitTypeData%MemberDivSize)
+   end if
+   if (allocated(InitTypeData%MemberNDiv)) then
+      deallocate(InitTypeData%MemberNDiv)
+   end if
+   if (allocated(InitTypeData%MemberElemStart)) then
+      deallocate(InitTypeData%MemberElemStart)
+   end if
    if (allocated(InitTypeData%SSOutList)) then
       deallocate(InitTypeData%SSOutList)
    end if
@@ -1758,6 +1806,9 @@ subroutine SD_PackInitType(RF, Indata)
    call RegPackAlloc(RF, InData%GuyanDampMat)
    call RegPackAlloc(RF, InData%Members)
    call RegPackAlloc(RF, InData%MemberSpin)
+   call RegPackAlloc(RF, InData%MemberDivSize)
+   call RegPackAlloc(RF, InData%MemberNDiv)
+   call RegPackAlloc(RF, InData%MemberElemStart)
    call RegPackAlloc(RF, InData%SSOutList)
    call RegPack(RF, InData%OutCOSM)
    call RegPack(RF, InData%TabDelim)
@@ -1834,6 +1885,9 @@ subroutine SD_UnPackInitType(RF, OutData)
    call RegUnpackAlloc(RF, OutData%GuyanDampMat); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpackAlloc(RF, OutData%Members); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpackAlloc(RF, OutData%MemberSpin); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%MemberDivSize); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%MemberNDiv); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpackAlloc(RF, OutData%MemberElemStart); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpackAlloc(RF, OutData%SSOutList); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%OutCOSM); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%TabDelim); if (RegCheckErr(RF, RoutineName)) return

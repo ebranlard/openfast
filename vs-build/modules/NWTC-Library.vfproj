@@ -121,7 +121,32 @@
 				<File RelativePath="..\..\modules\nwtc-library\src\NetLib\scalapack\dlasrt2.f"/>
 				<File RelativePath="..\..\modules\nwtc-library\src\NetLib\slatec\dqk61.f"/>
 				<File RelativePath="..\..\modules\nwtc-library\src\NetLib\slatec\fdump.f"/>
-				<File RelativePath="..\..\modules\nwtc-library\src\NetLib\fftpack\fftpack4.1.f"/>
+				<File RelativePath="..\..\modules\nwtc-library\src\NetLib\fftpack\fftpack5.1.f">
+					<FileConfiguration Name="Double_Debug|x64">
+						<Tool Name="VFFortranCompilerTool" RealKIND="realKIND4"/>
+					</FileConfiguration>
+					<FileConfiguration Name="Double_Release|x64">
+						<Tool Name="VFFortranCompilerTool" RealKIND="realKIND4"/>
+					</FileConfiguration>
+					<FileConfiguration Name="Double_OpenMP_Release|x64">
+						<Tool Name="VFFortranCompilerTool" RealKIND="realKIND4"/>
+					</FileConfiguration>
+					<FileConfiguration Name="Release|x64">
+						<Tool Name="VFFortranCompilerTool" RealKIND="realKIND4"/>
+					</FileConfiguration>
+					<FileConfiguration Name="Matlab_Debug|x64">
+						<Tool Name="VFFortranCompilerTool" RealKIND="realKIND4"/>
+					</FileConfiguration>
+					<FileConfiguration Name="Matlab_Release|x64">
+						<Tool Name="VFFortranCompilerTool" RealKIND="realKIND4"/>
+					</FileConfiguration>
+					<FileConfiguration Name="Debug|x64">
+						<Tool Name="VFFortranCompilerTool" RealKIND="realKIND4"/>
+					</FileConfiguration>
+					<FileConfiguration Name="OpenMP_Release|x64">
+						<Tool Name="VFFortranCompilerTool" RealKIND="realKIND4"/>
+					</FileConfiguration>
+				</File>
 				<File RelativePath="..\..\modules\nwtc-library\src\NetLib\slatec\i1mach.f"/>
 				<File RelativePath="..\..\modules\nwtc-library\src\NetLib\slatec\j4save.f"/>
 				<File RelativePath="..\..\modules\nwtc-library\src\NetLib\fftpack\NWTC_FFTPACK.f90"/>

@@ -98,7 +98,7 @@ set(NWTCLIBS_SOURCES
   src/Polynomial/quartic.f90
   
   # NetLib sources
-  src/NetLib/fftpack/fftpack4.1.f
+  src/NetLib/fftpack/fftpack5.1.f
   src/NetLib/scalapack/dlasrt2.f
   src/NetLib/scalapack/slasrt2.f
   src/NetLib/fftpack/NWTC_FFTPACK.f90
@@ -123,6 +123,15 @@ set(NWTCLIBS_SOURCES
 )
 
 get_filename_component(FCNAME ${CMAKE_Fortran_COMPILER} NAME)
+
+# FFTPACK 5.1 uses legacy Fortran 77 type punning (COMPLEX<->REAL) and must
+# NOT be promoted to double precision (its callers pass explicit SiKi/R4Ki arrays).
+# -Wno-pedantic is required because -pedantic (added for Debug builds) promotes the
+# argument mismatches back to errors, overriding -fallow-argument-mismatch.
+if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
+   set_source_files_properties(src/NetLib/fftpack/fftpack5.1.f PROPERTIES COMPILE_FLAGS
+      "-fallow-argument-mismatch -Wno-pedantic -fno-default-real-8 -fno-default-double-8")
+endif()
 
 # Recursive use of routine in qk61/dqk61 will trigger errors in debug
 if (CMAKE_BUILD_TYPE MATCHES Debug)
