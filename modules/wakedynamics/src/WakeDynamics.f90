@@ -831,8 +831,7 @@ subroutine WD_UpdateStates( t, n, u, p, x, xd, z, OtherState, m, errStat, errMsg
          call updateVelocityCartesianFE()
 
       elseif ( p%NumScheme == NumScheme_FD ) then
-         !call updateVelocityCartesianFD()
-         call Abort('Cartesian finite-difference not implemented yet.'); return
+         call updateVelocityCartesianFD()
       endif
    else
       ! --- Polar
@@ -1107,7 +1106,210 @@ contains
 
    !> 
    subroutine updateVelocityCartesianFD()
-      ! TODO
+
+      integer(intKi) :: iy, iz, i
+      integer(intKi) :: II, JJ
+      integer(intKi) :: N
+      integer(intKi) :: info
+      real(ReKi), allocatable    :: AA(:,:), rhs(:)
+      integer(IntKi), allocatable :: ipiv(:)
+      integer(intKi) :: iyMin
+      integer(intKi) :: izMin
+      real(ReKi) :: a, b, c, d, e
+      real(ReKi) :: rhs_term
+      real(ReKi) :: advection
+      real(ReKi) :: divTau
+      real(ReKi) :: dy
+      real(ReKi) :: dz
+      real(ReKi) :: SyU, SzU, SyV, SzV, SyW, SzW
+      real(ReKi) :: UU, VV, WW
+      real(ReKi) :: xp
+      ! Plane dimensions
+      integer(intKi) :: Ny, Nz
+
+      Ny = 2*p%NumRadii - 1  
+      Nz = 2*p%NumRadii - 1  
+
+      N = Ny*Nz
+
+      ! Allocate matrix and vectors
+      allocate(AA(N,N))
+      allocate(rhs(N))
+      allocate(ipiv(N))
+
+      do i = maxPln, 1, -1
+
+         ! get all deltas you need for FD
+         dy = p%dr
+         dz = p%dr
+         ! NOTE: we cannot use data at i here since positions of planes have not been updated yet
+         dx = abs(dot_product(xd%xhat_plane(:,i-1),xd%V_plane_filt(:,i-1))*p%DT_low)
+         !xp = xd%p_plane(1,i-1)/u%D_rotor ! Current plane downstream x position in D
+         xp = (xd%x_plane(i-1) + abs(dx))/u%D_rotor 
+
+         ! Reset matrix
+         AA = 0.0_ReKi
+
+         do II = 1, N
+            AA(II,II) = 1.0_ReKi
+         end do
+
+         rhs = 0.0_ReKi
+
+         ! Slopes definition
+         SyU = 0.0_ReKi
+         SzU = 0.0_ReKi
+         SyV = 0.0_ReKi
+         SzV = 0.0_ReKi
+         SyW = 0.0_ReKi
+         SzW = 0.0_ReKi
+
+         ! d(nu)/dy and d(nu)/dz
+         call gradient_y( m%vt_tot2(:,:,i-1), p%dr, m%dnu_dy(:,:,i-1) )
+         call gradient_z( m%vt_tot2(:,:,i-1), p%dr, m%dnu_dz(:,:,i-1) )
+
+         !--------------------------------------------
+         ! Assemble A*V = rhs for this x-plane
+         !--------------------------------------------
+         do iz = -p%NumRadii+2, p%NumRadii-2
+            do iy = -p%NumRadii+2, p%NumRadii-2
+
+               UU = xd%Vx_wind_disk_filt(i-1)+SyU*p%y(iy) + SzU*p%z(iz)
+               VV = SyV*p%y(iy) + SzV*p%z(iz) !p%y(iy)
+               WW = SyW*p%y(iy) + SzW*p%z(iz)
+
+               ! Row associated with this grid point
+               iyMin = -p%NumRadii+1 ; izMin = -p%NumRadii+1
+
+               ! maybe remove + 1
+               II = (iy - iyMin)*Ny + (iz - izMin)
+
+               !----------------------------------------
+               ! Compute coefficients from your stencil
+               !----------------------------------------
+               !
+               a = - (1/(4*dy))*VV + (1/(4*dy))*m%dnu_dy(iy,iz,i-1) - m%vt_tot2(iy,iz,i-1)/(2*dy**2)
+               b = UU/dx + m%vt_tot2(iy,iz,i-1)/(dy**2) + m%vt_tot2(iy,iz,i-1)/(dz**2)
+               c = + (1/(4*dy))*VV - (1/(4*dy))*m%dnu_dy(iy,iz,i-1) - m%vt_tot2(iy,iz,i-1)/(2*dy**2)
+               d = - (1/(4*dz))*WW + (1/(4*dz))*m%dnu_dz(iy,iz,i-1) - m%vt_tot2(iy,iz,i-1)/(2*dz**2)
+               e = + (1/(4*dz))*WW - (1/(4*dz))*m%dnu_dz(iy,iz,i-1) - m%vt_tot2(iy,iz,i-1)/(2*dz**2)
+               advection = -VV * SyU - WW * SzU
+               
+               ! Eddy viscosity term
+               ! divTau = m%dnuvx_dy(iy,iz) + m%dnuvx_dz(iy,iz) &
+               !   + m%dnu_dy(iy,iz,i-1) * SyU &
+               !   + m%dnu_dz(iy,iz,i-1) * SzU
+
+               ! Assuming 2nd order terms are negligible for linear shear
+               divTau = m%dnu_dy(iy,iz,i-1) * SyU &
+                  + m%dnu_dz(iy,iz,i-1) * SzU
+
+               
+               rhs_term = (((1/(4*dy))*VV - (1/(4*dy))*m%dnu_dy(iy,iz,i-1) + m%vt_tot2(iy,iz,i-1)/(2*dy**2))*xd%Vx_wake2(iy-1,iz,i-1) + &
+                           (UU/dx - m%vt_tot2(iy,iz,i-1)/(dy**2) - m%vt_tot2(iy,iz,i-1)/(dz**2))*xd%Vx_wake2(iy,iz,i-1) + &
+                           (- (1/(4*dy))*VV + (1/(4*dy))*m%dnu_dy(iy,iz,i-1) + m%vt_tot2(iy,iz,i-1)/(2*dy**2))*xd%Vx_wake2(iy+1,iz,i-1) + &
+                           ((1/(4*dz))*WW + (1/(4*dz))*m%dnu_dz(iy,iz,i-1) - m%vt_tot2(iy,iz,i-1)/(2*dz**2))*xd%Vx_wake2(iy,iz-1,i-1) + &
+                           ((1/(4*dz))*WW - (1/(4*dz))*m%dnu_dz(iy,iz,i-1) - m%vt_tot2(iy,iz,i-1)/(2*dz**2))*xd%Vx_wake2(iy,iz+1,i-1) + &
+                           advection + divTau &
+                           )
+
+               ! iy-1  
+               JJ = II - Ny
+               
+               !print *, 'DEBUG AA ACCESS:'
+               !print *, '  II    = ', II
+               !print *, '  JJ    = ', JJ
+               !print *, '  iz    = ', iz
+               !print *, '  izMin = ', izMin
+               !print *, '  iy    = ', iy
+               !print *, '  iyMin = ', iyMin
+               !print *, '  Ny    = ', Ny
+               !print *, '  a     = ', a
+               !print *, '  AA bounds: ', lbound(AA,1), ubound(AA,1), &
+               !                        lbound(AA,2), ubound(AA,2)
+               !call flush(6)
+
+               AA(II,JJ) =  a
+
+               ! center
+               JJ = II
+               AA(II,JJ) =  b
+
+               ! iy+1 
+               JJ = II + Ny
+               AA(II,JJ) =  c
+
+               ! iz-1 
+               JJ = II - 1
+               AA(II,JJ) =  d
+
+               ! iz+1
+               JJ = II + 1
+               AA(II,JJ) =  e
+
+               rhs(II) = rhs(II) + rhs_term
+
+
+            end do
+         end do
+
+
+         !--------------------------------------------
+         ! Solve A*V = rhs
+         ! rhs is overwritten with solution
+         !--------------------------------------------
+
+         ! Solve the linear system A*x = rhs using LU factorization with partial pivoting
+         ! On input:
+         !   A    = coefficient matrix (N x N)
+         !   rhs  = right-hand side vector
+         !   ipiv = integer array for pivoting information
+         ! After the call:
+         !   rhs  = solution vector x (overwritten)
+         !   A    = overwritten with LU factors
+         !   info = 0 if successful, >0 if matrix is singular
+
+         ! print *, '================ BEFORE DGESV ================'
+         ! print *, 'N       = ', N
+         ! print *, 'Ny      = ', Ny
+         ! print *, 'Nz      = ', Nz
+         ! print *, 'AA size = ', size(AA,1), size(AA,2)
+         ! print *, 'rhs size= ', size(rhs)
+         ! print *, 'ipiv size=', size(ipiv)
+         ! print *, 'AA(1,1)   = ', AA(1,1)
+         ! print *, 'AA(N,N)   = ', AA(N,N)
+         ! print *, 'rhs(1)    = ', rhs(1)
+         ! print *, 'rhs(N)    = ', rhs(N)
+         ! print *, 'max |AA|  = ', maxval(abs(AA))
+         ! print *, 'max |rhs| = ', maxval(abs(rhs))
+         ! call flush(6)
+
+         ! print *, 'REACHED sGESV'
+         ! call flush(6)
+
+         call SGESV(N,1,AA,N,ipiv,rhs,N,info)
+
+         ! print *, 'sGESV RETURNED, INFO = ', info
+         ! call flush(6)
+         !--------------------------------------------
+         ! Unstack solution back to Vx_wake2
+         !--------------------------------------------
+
+         do iz = -p%NumRadii+2, p%NumRadii-2
+            do iy = -p%NumRadii+2, p%NumRadii-2
+
+               ! remove + 1
+               II = (iy - iyMin)*Ny + (iz - izMin)
+
+               xd%Vx_wake2(iy,iz,i) = rhs(II)
+
+            end do
+         end do
+
+
+      end do ! i
+
+
    end subroutine updateVelocityCartesianFD
 
    !> 
