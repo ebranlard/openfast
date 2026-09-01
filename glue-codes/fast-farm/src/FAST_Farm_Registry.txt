@@ -90,6 +90,8 @@ typedef  ^               ParameterType         IntKi           WAT_NxNyNz      {
 typedef  ^               ParameterType         ReKi            WAT_DxDyDz      {3}  - - "Distance (in meters) between points in the x, y, and z directions of the WAT_BoxFile -- derived (WAT=1) or read from input file (WAT=2)" (m)
 typedef  ^               ParameterType         logical         WAT_ScaleBox    -    - - "Flag to scale the input turbulence box to zero mean and unit standard deviation at every node" -
 
+typedef  ^               ParameterType         ReKi            SV_SlopesPrescr {6} - - "Prescribed slopes of U,V,W wrt y and z, dimension (6)" 1/s
+
 # ..... FARM MiscVar data .......................................................................................................
 typedef    ^    MiscVarType       ReKi          AllOuts        {:} - - "An array holding the value of all of the calculated (not only selected) output channels" "see OutListParameters.xlsx spreadsheet"
 typedef    ^    ^                 DbKi          TimeData       {:} - - "Array to contain the time output data for the binary file (first output time and a time [fixed] increment)"

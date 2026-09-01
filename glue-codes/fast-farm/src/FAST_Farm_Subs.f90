@@ -1345,6 +1345,17 @@ subroutine FARM_UpdateStates(t, n, farm, ErrStat, ErrMsg)
    !$OMP PARALLEL default(shared)
    !$OMP do private(nt, ErrStat2, ErrMsg2) schedule(runtime)
    DO nt = 1,farm%p%NumTurbines
+
+      if (farm%WD(nt)%p%ShearVeer) then
+         if (.not. any(isnan(farm%p%SV_SlopesPrescr))) then
+            farm%WD(nt)%u%SV_Slopes(1, :) = farm%p%SV_SlopesPrescr(1)
+            farm%WD(nt)%u%SV_Slopes(2, :) = farm%p%SV_SlopesPrescr(2)
+            farm%WD(nt)%u%SV_Slopes(3, :) = farm%p%SV_SlopesPrescr(3)
+            farm%WD(nt)%u%SV_Slopes(4, :) = farm%p%SV_SlopesPrescr(4)
+            farm%WD(nt)%u%SV_Slopes(5, :) = farm%p%SV_SlopesPrescr(5)
+            farm%WD(nt)%u%SV_Slopes(6, :) = farm%p%SV_SlopesPrescr(6)
+         endif
+      endif
       
       call WD_UpdateStates( t, n, farm%WD(nt)%u, farm%WD(nt)%p, farm%WD(nt)%x, farm%WD(nt)%xd, farm%WD(nt)%z, &
                      farm%WD(nt)%OtherSt, farm%WD(nt)%m, ErrStat2, ErrMsg2 )         

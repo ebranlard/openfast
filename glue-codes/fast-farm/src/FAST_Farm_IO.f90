@@ -553,6 +553,7 @@ END SUBROUTINE WriteFarmOutputToFile
 !> This routine reads in the primary FAST.Farm input file, does some validation, and places the values it reads in the
 !!   parameter structure (p). It prints to an echo file if requested.
 SUBROUTINE Farm_ReadPrimaryFile( InputFile, p, WD_InitInp, AWAE_InitInp, OutList, ErrStat, ErrMsg )
+   use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
    TYPE(Farm_ParameterType),       INTENT(INOUT) :: p                               !< The parameter data for the FAST (glue-code) simulation
    CHARACTER(*),                   INTENT(IN   ) :: InputFile                       !< Name of the file containing the primary input data
    TYPE(WD_InputFileType),         INTENT(  OUT) :: WD_InitInp                      !< input-file data for WakeDynamics module
@@ -592,7 +593,7 @@ SUBROUTINE Farm_ReadPrimaryFile( InputFile, p, WD_InitInp, AWAE_InitInp, OutList
    ! Legacy inputs for backward compatibility !Note: remove after version 7.0
    integer(IntKi)                :: Mod_Wake_Old
    logical                       :: Swirl_Old
-   character(1024)               :: sLine ! string to temporarially hold value of read line 
+   character(1024)               :: sLine, sDummy ! string to temporarially hold value of read line 
    logical                       :: newFormat
 
       ! Initialize some variables:
@@ -1064,6 +1065,31 @@ SUBROUTINE Farm_ReadPrimaryFile( InputFile, p, WD_InitInp, AWAE_InitInp, OutList
    CALL ReadCom( UnIn, InputFile, 'Section Header: OutList', ErrStat2, ErrMsg2, UnEc ); if (Failed()) return
    CALL ReadOutputList ( UnIn, InputFile, OutList, p%NumOuts, 'OutList', "List of user-requested output channels", ErrStat2, ErrMsg2, UnEc  ); if (Failed()) return     ! Routine in NWTC Subroutine Library
 
+   ! --- Advanced Options
+   ! NOTE: no error handling since this is for debug
+   ! Default options are typically "true"
+   CALL ReadCom(UnIn, InputFile,'--- Advanced options header', ErrStat2, ErrMsg2)
+
+
+   p%SV_SlopesPrescr = ieee_value(0.0d0, ieee_quiet_nan)
+
+   if(ErrStat2==ErrID_None) then
+     call WrScr(' - Reading advanced options for FAST.Farm:')
+      do while(ErrStat2==ErrID_None)
+         read(UnIn, '(A)', iostat=ErrStat2) sLine
+         if (ErrStat2/=ErrID_None) exit
+         sDummy = sLine
+         call Conv2UC(sDummy)  ! to uppercase
+         if (index(sDummy, '!') == 1 .or. index(sDummy, '=') == 1 .or. index(sDummy, '#') == 1) then
+            ! pass comment lines
+         elseif (index(sDummy, 'SLOPES')>1) then
+            read(sLine, fmt=*) p%SV_SlopesPrescr(1:6)
+            print*,'   >>> SV_SlopesPrescr    ',p%SV_SlopesPrescr
+         else
+            print*,'[WARN] Line ignored: '//trim(sLine)
+         endif
+      enddo
+   endif
 
    !---------------------- END OF FILE -----------------------------------------
 
@@ -1073,6 +1099,9 @@ SUBROUTINE Farm_ReadPrimaryFile( InputFile, p, WD_InitInp, AWAE_InitInp, OutList
    ! NOTE: remove me in future release (>6.0)
    if (.not.newFormat) call setAndPrintNewInputsFromOld()
    call setReasonableInputs()
+
+
+
 
    RETURN
 

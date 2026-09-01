@@ -105,6 +105,7 @@ IMPLICIT NONE
     INTEGER(IntKi) , DIMENSION(1:3)  :: WAT_NxNyNz = 0_IntKi      !< Number of points in the x, y, and z directions of the WAT_BoxFile -- derived (WAT=1) or read from input file (WAT=2) [(m)]
     REAL(ReKi) , DIMENSION(1:3)  :: WAT_DxDyDz = 0.0_ReKi      !< Distance (in meters) between points in the x, y, and z directions of the WAT_BoxFile -- derived (WAT=1) or read from input file (WAT=2) [(m)]
     LOGICAL  :: WAT_ScaleBox = .false.      !< Flag to scale the input turbulence box to zero mean and unit standard deviation at every node [-]
+    REAL(ReKi) , DIMENSION(1:6)  :: SV_SlopesPrescr = 0.0_ReKi      !< Prescribed slopes of U,V,W wrt y and z, dimension (6) [1/s]
   END TYPE Farm_ParameterType
 ! =======================
 ! =========  Farm_MiscVarType  =======
@@ -381,6 +382,7 @@ subroutine Farm_CopyParam(SrcParamData, DstParamData, CtrlCode, ErrStat, ErrMsg)
    DstParamData%WAT_NxNyNz = SrcParamData%WAT_NxNyNz
    DstParamData%WAT_DxDyDz = SrcParamData%WAT_DxDyDz
    DstParamData%WAT_ScaleBox = SrcParamData%WAT_ScaleBox
+   DstParamData%SV_SlopesPrescr = SrcParamData%SV_SlopesPrescr
 end subroutine
 
 subroutine Farm_DestroyParam(ParamData, ErrStat, ErrMsg)
@@ -512,6 +514,7 @@ subroutine Farm_PackParam(RF, Indata)
    call RegPack(RF, InData%WAT_NxNyNz)
    call RegPack(RF, InData%WAT_DxDyDz)
    call RegPack(RF, InData%WAT_ScaleBox)
+   call RegPack(RF, InData%SV_SlopesPrescr)
    if (RegCheckErr(RF, RoutineName)) return
 end subroutine
 
@@ -598,6 +601,7 @@ subroutine Farm_UnPackParam(RF, OutData)
    call RegUnpack(RF, OutData%WAT_NxNyNz); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%WAT_DxDyDz); if (RegCheckErr(RF, RoutineName)) return
    call RegUnpack(RF, OutData%WAT_ScaleBox); if (RegCheckErr(RF, RoutineName)) return
+   call RegUnpack(RF, OutData%SV_SlopesPrescr); if (RegCheckErr(RF, RoutineName)) return
 end subroutine
 
 subroutine Farm_CopyMisc(SrcMiscData, DstMiscData, CtrlCode, ErrStat, ErrMsg)
